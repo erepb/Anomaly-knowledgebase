@@ -1,9 +1,9 @@
 ---
 domain: modlayer/unlocalizer
 tags: [modlayer, unlocalizer, lua, config]
-sources: [src/xrServerEntities/script_storage.cpp, src/xrServerEntities/script_engine.cpp, gamedata/configs/unlocalizers/unlocalizer_test.ltx]
-related: [modlayer/_overview.md, flows/lua-callback-lifecycle.md, engine/server-entities.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [src/xrServerEntities/script_storage.cpp, src/xrServerEntities/script_engine.cpp, gamedata/configs/unlocalizers/unlocalizer_test.ltx, gamedata/configs/unlocalizers/unlocalizer_modded_exes_pda.ltx]
+related: [modlayer/_overview.md, flows/lua-callback-lifecycle.md, flows/pda-map-news.md, engine/server-entities.md, GLOSSARY.md]
+updated: 2026-06-26
 verified: code
 ---
 
@@ -51,6 +51,12 @@ reading the engine implementation in `CScriptStorage::do_file`
 Drop a `.ltx` in `gamedata/configs/unlocalizers/` (any filename). Each `[section]` is the **target
 script name without `.script`** (case-insensitive); list the variable names to unlocalize under it.
 Canonical example: `unlocalizer_test.ltx` (its comments match the implementation above).
+
+Real shipped use: `unlocalizer_modded_exes_pda.ltx` → `[pda] map_spot_property` drops the `local` on
+`pda.script`'s `map_spot_property`, making it a shared `pda.`-namespace table that the map context-menu
+build (`property_box_add_properties`), click (`property_box_clicked`) and `_G.COnRightClickMap` all
+read/write across scripts (`flows/pda-map-news.md`). Without it the click dispatch couldn't recover the
+spot context.
 
 ## Why it exists
 

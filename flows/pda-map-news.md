@@ -1,9 +1,9 @@
 ---
 domain: flows/pda-map-news
 tags: [xrgame, pda, map, map-location, news, contacts, flow]
-sources: [src/xrGame/map_manager.cpp, src/xrGame/map_manager.h, src/xrGame/map_location.cpp, src/xrGame/map_location.h, src/xrGame/map_spot.cpp, src/xrGame/map_spot.h, src/xrGame/ui/UIMap.cpp, src/xrGame/level_script.cpp, src/xrGame/PDA.cpp, src/xrGame/PDA.h, src/xrGame/game_news.cpp, src/xrGame/actor_communication.cpp]
-related: [flows/tasks.md, flows/hud-ui-load.md, flows/relations-info.md, flows/save-load.md, flows/pda-tabs.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-22
+sources: [src/xrGame/map_manager.cpp, src/xrGame/map_manager.h, src/xrGame/map_location.cpp, src/xrGame/map_location.h, src/xrGame/map_spot.cpp, src/xrGame/map_spot.h, src/xrGame/ui/UIMap.cpp, src/xrGame/ui/UIMapWnd.cpp, src/xrGame/level_script.cpp, src/xrGame/PDA.cpp, src/xrGame/PDA.h, src/xrGame/game_news.cpp, src/xrGame/actor_communication.cpp]
+related: [flows/tasks.md, flows/hud-ui-load.md, flows/relations-info.md, flows/save-load.md, flows/pda-tabs.md, modlayer/unlocalizer.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-06-26
 verified: code
 ---
 
@@ -65,6 +65,34 @@ arrow).
   (a second textured layer), but `CMapLocation::UpdateSpot` calls `show_static_border(true)` *only*
   when the location's owning task is the active task — it is not a general second-layer slot for
   non-task spots.
+
+## Right-click context menu (engine seam → Lua bus, verified)
+
+Right-clicking a spot opens a **properties (context) menu**: the engine dispatches and owns the
+`CUIPropertiesBox`, but the menu *content* is built by the mod layer over the same `map_spot_menu_*`
+bus the PDA tabs use (`flows/pda-tabs.md`).
+
+- **Select the spot.** `CMapSpot::OnMouseDown(MOUSE_2)` (`map_spot.cpp`) sends `MAP_SELECT_SPOT2` to its
+  message target and returns `true`. RBUTTON dispatch in `CUIWindow::OnMouseAction` walks children in
+  **reverse draw order and stops at the first that consumes it** → only the **topmost** overlapping spot
+  is selected. `CUILevelMap::SendMessage` (`ui/UIMap.cpp`) routes it to
+  `CUIMapWnd::ActivatePropertiesBox(spot)`.
+- **Build.** `CUIMapWnd::ActivatePropertiesBox` (`ui/UIMapWnd.cpp`) `RemoveAll()`s the box, then calls
+  Lua **`pda.property_box_add_properties(box, id, level, hint)`** → broadcast
+  **`map_spot_menu_add_property`**: each mod (`game_fast_travel`, `pda_actor`, Warfare, …) conditionally
+  `box:AddItem(text)` keyed on `id`. It also calls **`_G.COnRightClickMap(box, table)`**
+  (`gamedata/scripts/callbacks_gameobject.script`) for position-based "anywhere" items
+  (fast-travel-to-point, and the pin/waypoint mod via `on_map_right_click`), passing
+  `object_id = spot id`, or **65535 when the click hit empty map**. `Show()` only if the box gained items.
+- **Click.** Selecting an item sends `PROPERTY_CLICKED`; `CUIMapWnd::SendMessage` calls Lua
+  **`pda.property_box_clicked(box)`**, which reads the clicked item's **text** + the single
+  **`pda.map_spot_property.id`** and fires **`map_spot_menu_property_clicked(box, id, level, text)`** —
+  each mod checks "is this text mine for this id?" and acts.
+
+`pda.map_spot_property` is one shared table (written by the build + `COnRightClickMap`, read by the
+click) reachable cross-script only because the **unlocalizer** strips its `local`
+(`modlayer/unlocalizer.md`). Handlers key purely on `id` and are stateless (they push into the shared
+box, return nothing), so the same `id` fed to the build broadcast twice yields duplicate items.
 
 ## PDA contacts (class verified; feel-touch agent-traced)
 
@@ -144,6 +172,10 @@ gameplay.
   `map_remove_object_spot`, `map_change_spot_hint`, `map_has_object_spot`)
 - Spot draw order: `src/xrGame/ui/UIMap.cpp` (`CUILevelMap::UpdateSpots` stable-sort by
   `get_location_level`); per-element tint/shader in `flows/hud-ui-load.md`
+- Right-click menu: `src/xrGame/map_spot.cpp` (`OnMouseDown(MOUSE_2)`→`MAP_SELECT_SPOT2`),
+  `src/xrGame/ui/UIMap.cpp` (`CUILevelMap::SendMessage` routing), `src/xrGame/ui/UIMapWnd.cpp`
+  (`ActivatePropertiesBox`, `PROPERTY_CLICKED` dispatch); Lua bus in `flows/pda-tabs.md`,
+  `gamedata/scripts/callbacks_gameobject.script` (`COnRightClickMap`)
 - PDA: `src/xrGame/PDA.cpp`/`.h` (`CPda`, feel-touch contacts, battery)
 - News: `src/xrGame/game_news.cpp`/`.h` (`GAME_NEWS_DATA`), `actor_communication.cpp`
   (`CActor::AddGameNews`), `script_game_object_inventory_owner.cpp` (`GiveGameNews`)
@@ -156,5 +188,7 @@ gameplay.
 - Re-grep the `map_add_object_spot` family in `level_script.cpp` if the Lua spot surface changes, and
   `CUILevelMap::UpdateSpots` if the `location_level` draw-order sort moves.
 - Re-grep `CMapManager::AddMapLocation`/`Update` if the registry or culling changes.
+- Re-grep `ActivatePropertiesBox` / `MAP_SELECT_SPOT2` / `COnRightClickMap` if the right-click menu
+  dispatch changes; the Lua `map_spot_menu_*` bus is owned by `flows/pda-tabs.md`.
 - Promote the *(agent-traced)* `CMapLocation`/`CPda` feel-touch / `GAME_NEWS_DATA` bodies to verified
   when a PDA/map task needs the exact spot-loading or contact logic.
