@@ -1,9 +1,9 @@
 ---
 domain: meta
-tags: [meta, engine, modlayer, dltx, dxml, unlocalizer, ltx, callbacks, renderer]
-sources: [src/xrCore/Xr_ini.cpp, src/Layers/xrRenderPC_R4/r4.h, src/xrServerEntities/script_engine_export.cpp, gamedata/scripts/dxml_core.script, README.md, DXML.md]
-related: [INDEX.md, CONVENTIONS.md, modlayer/config-ltx.md, modlayer/dxml.md, engine/renderer.md]
-updated: 2026-06-05
+tags: [meta, engine, modlayer, dltx, dxml, unlocalizer, ltx, callbacks, renderer, ui]
+sources: [src/xrCore/Xr_ini.cpp, src/Layers/xrRenderPC_R4/r4.h, src/xrServerEntities/script_engine_export.cpp, src/xrGame/ui_defs.h, src/xrGame/ui_base.cpp, gamedata/scripts/dxml_core.script, README.md, DXML.md]
+related: [INDEX.md, CONVENTIONS.md, modlayer/config-ltx.md, modlayer/dxml.md, engine/renderer.md, flows/ui-scaling.md]
+updated: 2026-08-05
 verified: code
 ---
 
@@ -43,7 +43,10 @@ first for any task. Anchors below are linkable from other KB files (e.g. `GLOSSA
   `modlayer/config-ltx.md`.
 - <a id="dltx"></a>**DLTX** — Delta-LTX, a non-destructive config patching layer (by MerelyMezz,
   edited by demonized). Mods drop `mod_<file>_<name>.ltx` files that the engine merges into the base
-  `.ltx` at load. Section operators **merge key-by-key onto the base, not replace it**: `![section]`
+  `.ltx` at load. **`<file>` is the *root* ltx, never an `#include`d one** — the mod-file scan is
+  guarded by `bIsRootFile` in `CInifile::LTXLoad`, and `loadFile` passes `false` for every include.
+  So anything reached through `system.ltx` (e.g. `fonts.ltx`) is patched by `mod_system_*.ltx`; a
+  `mod_fonts_*.ltx` is never opened, with no warning and no crash. Section operators **merge key-by-key onto the base, not replace it**: `![section]`
   = override fragment for an existing section, `@[section]` = same but also creates the section if
   missing; listed keys replace the base's value, unmentioned base keys are kept, new keys added.
   Value operators: `>key = a,b` append to a list, `<key = a` remove from a list, `key = DLTX_DELETE`
@@ -67,6 +70,21 @@ first for any task. Anchors below are linkable from other KB files (e.g. `GLOSSA
   via `SendScriptCallback`. Game-object-specific callbacks live in
   `gamedata/scripts/callbacks_gameobject.script`. The manager is `axr_main.script`. See
   `modlayer/scripting.md`.
+- <a id="veto-callback"></a>**veto callback** — a callback whose *return* matters. The engine looks up a
+  `luabind::functor<bool>` and takes `false` as "don't do it"; the bridge in
+  `callbacks_gameobject.script` turns that into a bus callback by passing subscribers a mutable
+  `flags = { allow = true }` table and returning `flags.allow ~= false`. Current set:
+  `npc_on_combat_action_switch` (before a combat GOAP action swap), `npc_on_best_cover_repick` (before
+  replacing held cover), `npc_on_should_throw` (grenade). Two rules: the engine **re-asks every AI
+  update** while the answer stays "no" (keep handlers cheap and cap continuous denial), and a vetoed
+  action fires none of the corresponding "changed" callbacks. See `flows/stalker-execution.md`.
+- <a id="per-npc-lever"></a>**per-NPC lever** — this repo's convention for script-tunable AI: a setter on
+  `game_object` writes a field on the NPC's own manager (`CVisualMemoryManager`, `CEnemyManager`,
+  `CAI_Stalker`, `CEntityCondition`), which the engine reads on its normal path. Two invariants worth
+  memorizing: **a negative (or unset) value means "follow the global cvar / vanilla constant"**, and
+  **nothing is serialized** — every lever must be re-applied when the NPC comes back online. Catalog:
+  `gamedata/scripts/lua_help_ex.script`; mechanisms: `flows/ai-perception.md`,
+  `flows/stalker-execution.md`, `flows/damage-hit.md`.
 - <a id="axr_main"></a>**axr_main** — the module/callback manager (by Alundaio). Auto-runs any script
   exposing `on_game_start`, wiring the callback system. `gamedata/scripts/axr_main.script`.
 - <a id="hot-reload"></a>**hot reload** — two distinct things. (1) *Engine* hot-reload: a VS2022
@@ -110,6 +128,47 @@ first for any task. Anchors below are linkable from other KB files (e.g. `GLOSSA
 - <a id="spom"></a>**SPOM** — Silhouette Parallax Occlusion Mapping, an in-progress rendering feature
   in this repo (cross-Fvisual buffer + manifold check + hybrid shader path). Design docs in
   `claudedocs/`; state in the SPOM auto-memory. See `features/spom.md`.
+
+## UI concepts
+
+- <a id="ui-base-canvas"></a>**UI base canvas (1024x768)** — every UI XML layout is authored against a
+  fixed virtual canvas of `UI_BASE_WIDTH` x `UI_BASE_HEIGHT` (compile-time `#define`s in
+  `src/xrGame/ui_defs.h`, duplicated privately in `XR_IOConsole.cpp`). The whole `CUIWindow` tree does
+  its arithmetic in these base units; conversion to device pixels happens only at primitive emission,
+  via `ui_core::ClientToScreenScaled` and friends. The scale factors are **independent for X and Y**
+  (`ui_core::OnDeviceReset`), so any aspect wider than 4x3 is horizontally over-stretched. Layouts that
+  cannot survive the stretch get an aspect-class variant file (`_16` / `_21` suffix, picked by
+  `ui_core::get_xml_name` off `ui_core::screenmode`); coverage is partial. There is **no user-facing UI
+  scale option and no DPI awareness**. See `flows/ui-scaling.md`.
+- <a id="kx"></a>**kx** — the UI aspect-correction factor, `ui_core::get_current_kx`, algebraically
+  `scale.y / scale.x` (1.0 at 4x3, 0.75 at 16x9, 0.5625 at 21x9). Multiplying a width in base units by
+  `kx` cancels the horizontal over-stretch, so squares stay square and circles stay circular. It is
+  **opt-in per call site** — cursor, minimap, map spots, cell icons, rotated sprites each apply it by
+  hand; a new element that omits it renders as an ellipse at widescreen. The Lua mirror is
+  `utils_xml.screen_ratio`. See `flows/ui-scaling.md`.
+- <a id="font-atlas-rung"></a>**font atlas rung** — UI text is *not* scaled with the canvas; glyph
+  quads are emitted at the atlas's native pixel size (`dxFontRender::OnRender`) and layout inverse-maps
+  the metrics back into base units. Text size therefore comes from which atlas key of a `fonts.ltx`
+  font section gets picked for the current `Device.dwHeight`. Selection is `GetFontTextureName`
+  (`GameFont.cpp`, the single authority — `CFontManager::GetFontTexName` forwards to it): a section may
+  declare **arbitrary rungs** `texture_h<N>` where `N` *is* the authored device height, alongside the
+  **legacy four** (`texture800` / `texture` / `texture1600` / `texture2160`, authored 600/768/1200/2160,
+  of which only the band-winner-after-walk-down competes). Candidates are ranked by log-ratio distance
+  to the current height, ties going to an explicit rung then the larger atlas, and each is probed for a
+  real atlas file so a declared-but-missing one is skipped with a log line rather than rendering
+  nothing. Glyph advances scale with the *requested* height via `CGameFont::WidthScale`, which is what
+  makes a device-independent font (console, stat) legible at any resolution. Still a ladder, though:
+  with base-game content no `ui_font_*` section declares anything above `texture1600`, so UI text
+  shrinks relative to the layout past 1440p until atlases + a `mod_system_*.ltx` rung patch are
+  supplied. See `flows/ui-scaling.md`.
+- <a id="crisp-band"></a>**crisp band** (`border_l/t/r/b`) — per-texture opt-in on a `textures_descr`
+  `<texture>` entry naming how many outer texel rows/columns of that slice are *line art* rather than
+  content. `CUIFrameLineWnd` then draws each such row/column as its own flat band, rounded to whole
+  device pixels, and stretches only the interior — so a 1-texel border stays a crisp 1px line instead
+  of being smeared by the slice stretch. Any border on any slice also turns on cap scaling
+  (`SetCapScaled`), which sizes the end caps by element height × resolution instead of pinning them to
+  raw texture pixels. Shipped for list rows, scrollbars, option tracks, edit/spin/combobox backgrounds;
+  everything else renders exactly as vanilla. See `flows/ui-scaling.md`.
 
 ## Engine core concepts
 

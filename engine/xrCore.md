@@ -1,9 +1,9 @@
 ---
 domain: engine/xrCore
 tags: [engine, cpp, dltx, ltx]
-sources: [src/xrCore/Xr_ini.cpp, src/xrCore/xrstring.h, src/xrCore/LocatorAPI.h]
+sources: [src/xrCore/Xr_ini.cpp, src/xrCore/xrstring.h, src/xrCore/LocatorAPI.h, src/xrCore/LocatorAPI.cpp, src/xrCore/LocatorAPI_defs.cpp, src/xrCore/LocatorAPI_defs.h]
 related: [engine/_overview.md, modlayer/config-ltx.md, flows/dltx-config-load.md, engine/server-entities.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-08-17
 verified: code
 ---
 
@@ -34,6 +34,13 @@ Foundation library every other module depends on: strings, fast casts, file syst
   the `$game_config$`/`$game_scripts$`/… aliases are resolved here (parse loop in
   `LocatorAPI.cpp`). `FS.file_list(...)` is used by DLTX to find `mod_*` files. Readers:
   `file_stream_reader.*`, `stream_reader.*`.
+  **`FS_Path` owns raw `char*` members** (`LocatorAPI_defs.cpp`) and its constructor was hardened
+  (2026-07, "possible crash fix on level change"): all five pointers are nulled first, null `_Root`/`_Add`
+  are treated as empty strings, duplication goes through a local `xr_strdup_lwr`, and the trailing
+  separator is appended by `append_path_separator`. The matching call-site bug was
+  `new FS_Path(xr_strdup(...))` in `CLocatorAPI::_initialize` for `$fs_root$` — the ctor duplicates its
+  argument, so the extra `xr_strdup` leaked and the temporary it was built from could already be gone.
+  When adding a path alias, pass a plain `const char*`; the `FS_Path` copies it.
 - **LTX/ini + DLTX** (`Xr_ini.cpp`, `xr_ini.h`) — parses `.ltx` config into sections, handles
   `#include`, section inheritance, and the **DLTX delta-merge**. This is where `mod_<file>_<name>.ltx`
   patches are discovered and applied. Markers to grep: `DLTX`, `DLTX_DELETE`, `dltx_use_cache`,

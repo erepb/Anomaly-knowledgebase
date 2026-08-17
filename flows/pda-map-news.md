@@ -1,9 +1,9 @@
 ---
 domain: flows/pda-map-news
 tags: [xrgame, pda, map, map-location, news, contacts, flow]
-sources: [src/xrGame/map_manager.cpp, src/xrGame/map_manager.h, src/xrGame/map_location.cpp, src/xrGame/map_location.h, src/xrGame/map_spot.cpp, src/xrGame/map_spot.h, src/xrGame/ui/UIMap.cpp, src/xrGame/ui/UIMapWnd.cpp, src/xrGame/level_script.cpp, src/xrGame/PDA.cpp, src/xrGame/PDA.h, src/xrGame/game_news.cpp, src/xrGame/actor_communication.cpp]
-related: [flows/tasks.md, flows/hud-ui-load.md, flows/relations-info.md, flows/save-load.md, flows/pda-tabs.md, modlayer/unlocalizer.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-26
+sources: [src/xrGame/map_manager.cpp, src/xrGame/map_manager.h, src/xrGame/map_location.cpp, src/xrGame/map_location.h, src/xrGame/map_spot.cpp, src/xrGame/map_spot.h, src/xrGame/ui/UIMap.cpp, src/xrGame/ui/UIMapWnd.cpp, src/xrGame/ui/UIMapWnd.h, src/xrGame/ui/UIPropertiesBox.cpp, src/xrGame/ui/UIPropertiesBox.h, src/xrGame/level_script.cpp, src/xrGame/PDA.cpp, src/xrGame/PDA.h, src/xrGame/game_news.cpp, src/xrGame/actor_communication.cpp, gamedata/scripts/callbacks_gameobject.script, gamedata/scripts/modxml_fix_faction_spot_size.script]
+related: [flows/tasks.md, flows/hud-ui-load.md, flows/relations-info.md, flows/save-load.md, flows/pda-tabs.md, features/pda-tab-scroll.md, modlayer/unlocalizer.md, modlayer/dxml.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -77,22 +77,60 @@ bus the PDA tabs use (`flows/pda-tabs.md`).
   **reverse draw order and stops at the first that consumes it** → only the **topmost** overlapping spot
   is selected. `CUILevelMap::SendMessage` (`ui/UIMap.cpp`) routes it to
   `CUIMapWnd::ActivatePropertiesBox(spot)`.
-- **Build.** `CUIMapWnd::ActivatePropertiesBox` (`ui/UIMapWnd.cpp`) `RemoveAll()`s the box, then calls
-  Lua **`pda.property_box_add_properties(box, id, level, hint)`** → broadcast
-  **`map_spot_menu_add_property`**: each mod (`game_fast_travel`, `pda_actor`, Warfare, …) conditionally
-  `box:AddItem(text)` keyed on `id`. It also calls **`_G.COnRightClickMap(box, table)`**
-  (`gamedata/scripts/callbacks_gameobject.script`) for position-based "anywhere" items
-  (fast-travel-to-point, and the pin/waypoint mod via `on_map_right_click`), passing
-  `object_id = spot id`, or **65535 when the click hit empty map**. `Show()` only if the box gained items.
-- **Click.** Selecting an item sends `PROPERTY_CLICKED`; `CUIMapWnd::SendMessage` calls Lua
-  **`pda.property_box_clicked(box)`**, which reads the clicked item's **text** + the single
-  **`pda.map_spot_property.id`** and fires **`map_spot_menu_property_clicked(box, id, level, text)`** —
-  each mod checks "is this text mine for this id?" and acts.
+- **Build (multi-spot merge).** `CUIMapWnd::ActivatePropertiesBox` (`ui/UIMapWnd.cpp`) `RemoveAll()`s
+  the box, gathers **all** spots under the cursor (`GatherSpotsUnderCursor`, deduped by object id,
+  topmost first), and per spot adds an `AddHeader` title (first hint line via `clean_hint_title`;
+  the literal `"no hint"` XML default is treated as empty → level-name fallback) then calls Lua
+  **`pda.property_box_add_properties(box, id, level, hint)`** → broadcast
+  **`map_spot_menu_add_property`**: each mod (`game_fast_travel`, `tasks_placeable_waypoints`,
+  Warfare, …) conditionally `box:AddItem(text)` keyed on `id`. Headers whose spot contributed nothing
+  are removed. Every row (incl. submenu leaves, `TagSubmenuOwners`) is tagged with its owner
+  `{id, level, hint}` in `m_property_owners`. Finally **`_G.COnRightClickMap(box, table)`**
+  (`gamedata/scripts/callbacks_gameobject.script`) fires once for position-based "anywhere" items,
+  passing `object_id` = top spot id, or **65535 when the click hit empty map**. `Show()` only if the
+  box gained items.
+- **Click (context replay).** Selecting an item sends `PROPERTY_CLICKED`; `CUIMapWnd::SendMessage`
+  first **replays** `pda.property_box_add_properties` for the clicked row's owner into the hidden
+  `m_UIScratchBox` (skipped for 65535). Mods are *stateful*: they wipe + rebuild dispatch state at the
+  top of every add call (`game_fast_travel` keeps a label→action `menu_options` map; PAW dispatches on
+  `last_clicked_id`, ignoring the passed id), so after a merged N-spot build that state reflects the
+  *last* spot enumerated — the replay resets it to what a plain single-spot right-click on the owner
+  would have left. Then `pda.set_map_spot_context(id, level)` sets `pda.map_spot_property`, and
+  **`pda.property_box_clicked(box)`** reads the clicked item's **text** and fires
+  **`map_spot_menu_property_clicked(box, id, level, text, tag)`** — each mod checks "is this text mine
+  for this id?" and acts.
 
-`pda.map_spot_property` is one shared table (written by the build + `COnRightClickMap`, read by the
-click) reachable cross-script only because the **unlocalizer** strips its `local`
-(`modlayer/unlocalizer.md`). Handlers key purely on `id` and are stateless (they push into the shared
-box, return nothing), so the same `id` fed to the build broadcast twice yields duplicate items.
+`pda.map_spot_property` is one shared table (written by the build + `COnRightClickMap` +
+`set_map_spot_context`, read by the click) reachable cross-script only because the **unlocalizer**
+strips its `local` (`modlayer/unlocalizer.md`). Known residual: replayed labels that embed live data
+(fast travel's distance/cost) can drift from the displayed text if the actor moved while the menu was
+open → that click no-ops once.
+
+`pda.set_map_spot_context` and the `property_box_clicked` that forwards the tag are **repo additions in
+`gamedata/scripts/callbacks_gameobject.script`**, replacing the base-game `pda.property_box_clicked`
+wholesale — the base version reads only the label. Two extra `CUIPropertiesBox` surfaces support this
+menu shape, all Lua-exported and documented in `gamedata/scripts/lua_help_ex.script`:
+
+- **`AddHeader(text)`** — a non-selectable coloured title row (what groups a merged multi-spot menu).
+- **`AddSubmenu(label)`** — appends a `label >` row and returns the child box to populate
+  (`AddItem`/`AddHeader`/nested `AddSubmenu`). The child expands on hover and is owned by the parent
+  (`m_item_submenus`, torn down by `RemoveAll`); the engine tags submenu leaves with their owning spot
+  via `TagSubmenuOwners`, so a leaf click replays and dispatches like a top-level row. This **replaced**
+  the vanilla one-shot mechanism (a `CUIPropertiesBox` constructed with a child box + `ShowSubMenu()`);
+  its only user, the MP demo-play control (`UIDemoPlayControl.cpp`), now positions and hides its second
+  box itself.
+- **`AddItem(text, id)`** — a `u32` per-row id, read back as `GetSelectedItem():GetTAG()` and passed as
+  the trailing `tag` argument of `map_spot_menu_property_clicked`. This is what lets one menu carry
+  **duplicate labels** (the same action for two merged spots) without the text-matching dispatch
+  becoming ambiguous. `RemoveItemByTAG` removes by that id.
+
+`CUIMapWnd::DrawHint` early-outs while the properties box is shown, so the spot tooltip no longer
+draws under the open menu.
+
+Unrelated repo fix on the same screen: `gamedata/scripts/modxml_fix_faction_spot_size.script` (a DXML
+`on_xml_read` hook) rewrites `circle_army_spot` / `circle_ecolog_spot` in `map_spots.xml` and
+`map_spots_16.xml` to 24x24, matching every other faction — stock ships them at 28 in the widescreen
+variant, which rendered those two icons oversized.
 
 ## PDA contacts (class verified; feel-touch agent-traced)
 

@@ -1,9 +1,9 @@
 ---
 domain: flows/vehicles-holder
 tags: [xrgame, vehicle, car, helicopter, holder, mount, input, flow]
-sources: [src/xrGame/holder_custom.h, src/xrGame/holder_custom.cpp, src/xrGame/Car.cpp, src/xrGame/Car.h, src/xrGame/CarInput.cpp, src/xrGame/CarCameras.cpp, src/xrGame/Helicopter.cpp, src/xrGame/helicopter.h, src/xrGame/HolderEntityObject.cpp, src/xrGame/Actor.cpp]
-related: [flows/actor.md, flows/item-base.md, flows/weapon-fire-callbacks.md, engine/physics-collision.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-06
+sources: [src/xrGame/holder_custom.h, src/xrGame/holder_custom.cpp, src/xrGame/Car.cpp, src/xrGame/CarNew.cpp, src/xrGame/Car.h, src/xrGame/CarDrone.cpp, src/xrGame/CarDrone.h, src/xrGame/CarInput.cpp, src/xrGame/CarCameras.cpp, src/xrGame/CarScript.cpp, src/xrGame/Helicopter.cpp, src/xrGame/helicopter.h, src/xrGame/HolderEntityObject.cpp, src/xrGame/Actor.cpp, src/build_config_defines.h, gamedata/scripts/ltx_help_ex.script, gamedata/scripts/lua_help_ex.script]
+related: [flows/actor.md, flows/item-base.md, flows/weapon-fire-callbacks.md, flows/cscript-game-object.md, engine/physics-collision.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -61,6 +61,37 @@ vehicle: `PhDataUpdate` (physics step) drives wheels via the engine/transmission
 Input from the mounted actor is routed in `CarInput::OnKeyboardPress` (`kFWD`→forward, `kJUMP`→brake,
 `kDETECTOR`→toggle engine, …), with an optional `on_key_board` Lua pre-hook. `HolderEntityObject` is a
 generic mountable physics object (turret) on the same seam.
+
+## CAR_NEW: drone, visual camera, camera scopes (repo extension, verified surface)
+
+`CAR_NEW` (`src/build_config_defines.h`) is on, so `CarNew.cpp` — not the legacy `Car.cpp` path, both
+whole-file `#ifdef`s — is what runs, and three feature blocks hang off `CCar`. Each is **opt-in by
+config**: a block exists only if the visual's `userdata` declares its section, so an unmodified car is
+unaffected. Tunables split across two places — plain floats live in the car's **LTX section**, bone
+wiring in the visual's **userdata**. Keys are catalogued in `gamedata/scripts/ltx_help_ex.script`, the
+Lua surface in `lua_help_ex.script`.
+
+- **Drone subclass** (`CCarDrone`, `CarDrone.cpp/.h`) — built when the userdata declares
+  `[drone_definition]`. A drone is not a wheeled car: `PhDataUpdate` applies per-axis forces to the
+  physics elements of the bones named by `drive_bones` — `control_ele/pit/rol/yaw_force` for
+  up-down / forward-back / strafe / turn (yaw and the rotation damping are read in degrees and
+  converted) — with `damping_velocity` and per-axis `damping_rotation` to stop wobble, plus
+  `m_power_efficiency` as a payload-style responsiveness scalar (`CCarDrone_Get/SetPowerEfficiency`).
+  A userdata `[rotors]` section maps each rotor bone to a `clock:true/false` spin direction, spun by
+  `rotor_force` up to `rotor_speed` RPM in `RotorUpdate`; `Load` **`R_ASSERT3`s that at least one rotor
+  bone resolved**, so a drone section with no matching bones is a hard error, not a silent no-op.
+  Keyboard press/release/hold arrive through `CCar::CCarDrone_OnKeyboardPress/Release/Hold` and set the
+  `eControlEle/Yaw/Pit/Rol` intents; `ControlReset` clears them.
+- **Visual camera** (`CCar::SVisualCamera`) — `[visual_camera_definition]` with `enable`,
+  `rotate_x_bone`/`rotate_y_bone` and their speeds: a camera mounted on model bones that turns with the
+  view. Read back from Lua as `VisualCamera_GetDesireAngle` / `_GetRotXCur` / `_GetRotYCur`.
+- **Camera scopes** (`m_scopes`, `m_scope_active`) — `[scopes]` maps a level to `bone_camera:zoom`
+  (`S0 = bone_camera:1.0`, `S1 = …:2.0`, …), giving the mounted view discrete zoom steps.
+  `IsScopeEnable`/`GetScopeSize`/`GetScopeActive`/`SetScopeActive` plus `GetZoomFactor` and
+  `Get/SetViewportNear` are exported; `SetUseAction` overrides the use prompt. Input: `CActor`'s
+  mouse-wheel handler (`ActorInput.cpp`) checks `m_holder` for a scope-enabled car first and routes the
+  notch to `CCar::ScopeOnMouseWheel`, consuming it — so wheel-driven actor behaviour is suppressed while
+  mounted in a scoped vehicle.
 
 ## Helicopter (NOT a holder — AI aircraft) — agent-traced
 

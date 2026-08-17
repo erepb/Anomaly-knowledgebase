@@ -1,9 +1,9 @@
 ---
 domain: flows/inventory
 tags: [engine, cpp, inventory, items, flow, callbacks, alife]
-sources: [src/xrGame/Inventory.h, src/xrGame/Inventory.cpp, src/xrGame/inventory_item.cpp, src/xrGame/inventory_item.h, src/xrGame/InventoryOwner.cpp, src/xrGame/Actor_Events.cpp, src/xrGame/script_game_object_inventory_owner.cpp]
-related: [flows/object-lifecycle.md, flows/actor.md, flows/weapon-state-machine.md, engine/xrGame.md, engine/server-entities.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [src/xrGame/Inventory.h, src/xrGame/Inventory.cpp, src/xrGame/inventory_item.cpp, src/xrGame/inventory_item.h, src/xrGame/InventoryOwner.cpp, src/xrGame/Actor_Events.cpp, src/xrGame/inventory_quickswitch.cpp, src/xrGame/Bolt.cpp, src/xrGame/Grenade.cpp, src/xrGame/script_game_object_inventory_owner.cpp]
+related: [flows/object-lifecycle.md, flows/actor.md, flows/weapon-state-machine.md, flows/cscript-game-object.md, engine/xrGame.md, engine/server-entities.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -62,6 +62,16 @@ slot, `processing_deactivate` when stowed). Moving into/out of the active slot i
 `Activate` (below). Constraints: belt has a width limit and an item must be `Belt()`-capable; slots
 can be forbidden by the worn outfit (helmet/backpack availability); ruck is unlimited. *(bodies
 agent-traced; the mutual-exclusion + callback pattern is the load-bearing structure.)*
+
+**Slotting without activating** (repo addition). `CInventory::Slot` takes a `bDoNotActivate` flag, and
+the Lua `move_to_slot(item, slot_id, doNotActivate)` third argument reaches it — so a script can equip
+an item into its slot without the engine also making it the in-hands item. The flag travels over the
+`GEG_PLAYER_ITEM2SLOT` network event as a **trailing `u8`** read in `CActor::OnEvent`, with the
+conservative decoding "only the exact value 1 means do-not-activate". Every engine producer of that
+event was updated to write the byte (`CBolt::PutNextToSlot`, `CGrenade::PutNextToSlot`,
+`CInventory::ActivateNextItemInActiveSlot`, the script binding). **Any other code that constructs
+`GEG_PLAYER_ITEM2SLOT` must write the extra byte** or the packet will be mis-read — this is the one
+compatibility trap in the change.
 
 ## Activate — choose the in-hands item (verified state machine)
 

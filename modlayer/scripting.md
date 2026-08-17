@@ -1,9 +1,9 @@
 ---
 domain: modlayer/scripting
 tags: [modlayer, lua, callbacks, luabind, hot-reload]
-sources: [gamedata/scripts/axr_main.script, gamedata/scripts/callbacks_gameobject.script, gamedata/scripts/class_registrator_modded_exes.script, src/xrServerEntities/script_storage.cpp]
-related: [modlayer/_overview.md, modlayer/options-ui.md, engine/server-entities.md, engine/xrGame.md, flows/lua-callback-lifecycle.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [gamedata/scripts/axr_main.script, gamedata/scripts/callbacks_gameobject.script, gamedata/scripts/aaaa_script_fixes_mp.script, gamedata/scripts/lua_help_ex.script, gamedata/scripts/class_registrator_modded_exes.script, src/xrServerEntities/script_storage.cpp]
+related: [modlayer/_overview.md, modlayer/options-ui.md, modlayer/unlocalizer.md, modlayer/config-ltx.md, engine/server-entities.md, engine/xrGame.md, flows/lua-callback-lifecycle.md, flows/cscript-game-object.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -47,6 +47,21 @@ Representative callbacks seen in this repo's scripts: `on_xml_read`, `on_key_pre
 `on_before_hit_after_calcs`, `on_death`, `on_map_spot_selected`, `on_specific_character_init`,
 `on_luabind_fatal_error`, `on_loading_screen_*`, `on_belt_size_get`, `on_artefact_count_get`.
 
+Two patterns worth recognizing in `callbacks_gameobject.script` beyond plain fan-out:
+
+- **Veto callbacks.** The engine functor returns a bool, and the bridge synthesizes it from a mutable
+  table the subscribers write: `local flags = { allow = true }` → `SendScriptCallback(...)` → `return
+  flags.allow ~= false`. Live examples: `npc_on_combat_action_switch`, `npc_on_best_cover_repick`,
+  `npc_on_should_throw` (`flows/stalker-execution.md`). Subscribers must be cheap — the engine re-asks
+  every AI update while the proposed action stays denied.
+- **Base-function replacement.** The file also *overrides* base-game module functions when the engine
+  starts passing more data — e.g. it redefines `pda.property_box_clicked` to forward the clicked row's
+  `u32` TAG and adds `pda.set_map_spot_context` (`flows/pda-map-news.md`). Reachable because the
+  unlocalizer exposes base `local`s (`modlayer/unlocalizer.md`).
+
+Recently added engine→bus callbacks: `npc_on_weapon_reload_start`/`_stop`, `npc_on_combat_action_switch`,
+`npc_on_best_cover_repick`.
+
 ## Module lifecycle / hot reload
 
 `on_game_start` (auto-invoked by axr_main) is the standard module entry point where you register
@@ -70,10 +85,21 @@ here.
 ## Key infra files
 
 - `axr_main.script` — callback/module manager, reads `axr_options.ltx` via `ini_file_ex`.
-- `callbacks_gameobject.script` — game-object callback dispatch.
+- `callbacks_gameobject.script` — game-object callback dispatch (+ veto bridges, base-function
+  replacements).
 - `dynamic_callbacks.lua` — dynamic callback helpers.
 - `_g_patches.script` — global function patches/fixes.
-- `lua_help_ex.script` — extra Lua helpers added by modded exes.
+- `aaaa_script_fixes_mp.script` — the forked base-script patch collection (the `aaa*` load-order
+  convention). Not a helper library: it monkey-patches base modules. Current examples —
+  `item_weapon.check_scope`/`attach_scope` wrapping so upgrade-granted scopes can be mounted
+  (`flows/upgrade-system.md`), the `ActorMenu` `Action_Move` nil guard
+  (`flows/actor-menu-inventory-ui.md`), and a perf rewrite of `anomaly_restrictor_update` that keeps its
+  own `db_online_monsters` registry (fed by spawn/destroy trackers) and does the distance tests in Lua
+  instead of calling `level.iterate_nearest`, to avoid the luabind round-trip and the engine's spatial
+  sort per tick.
+- `lua_help_ex.script` — **documentation only** (one comment block, ~1200 lines): the catalog of the
+  console vars and Lua exports the modded exes add, grouped by class. Nothing executes; keep it in sync
+  when adding a binding. The LTX-side twin is `ltx_help_ex.script` (`modlayer/config-ltx.md`).
 - `modded_exes_migration.script` — version migration of mod settings.
 - `imgui_helper.script`, `imgui_lua_debug.script`, `lua_help_imgui.script` — ImGui binding helpers.
 

@@ -1,9 +1,9 @@
 ---
 domain: flows/renderer-post-process
 tags: [engine, renderer, r4, dx11, shaders, flow]
-sources: [src/Layers/xrRenderPC_R4/r4_rendertarget_phase_combine.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_PP.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_bloom.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_ssao.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_luminance.cpp, src/Layers/xrRender/rendertarget_phase_blur.cpp, src/Layers/xrRender/rendertarget_phase_dof.cpp, src/Layers/xrRender/rendertarget_phase_lut.cpp, src/Layers/xrRender/rendertarget_phase_smaa.cpp, src/Layers/xrRender/rendertarget_phase_nightvision.cpp, src/Layers/xrRender/rendertarget_phase_sunshafts.cpp]
+sources: [src/Layers/xrRenderPC_R4/r4_rendertarget_phase_combine.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_PP.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_bloom.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_ssao.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_phase_luminance.cpp, src/Layers/xrRender/rendertarget_phase_blur.cpp, src/Layers/xrRender/rendertarget_phase_dof.cpp, src/Layers/xrRender/rendertarget_phase_lut.cpp, src/Layers/xrRender/rendertarget_phase_smaa.cpp, src/Layers/xrRender/rendertarget_phase_nightvision.cpp, src/Layers/xrRender/rendertarget_phase_sunshafts.cpp, src/Layers/xrRenderPC_R4/r4_R_render.cpp]
 related: [flows/render-frame.md, flows/renderer-scene-graph.md, engine/renderer.md, features/spom.md, GLOSSARY.md]
-updated: 2026-06-06
+updated: 2026-08-17
 verified: code
 ---
 
@@ -131,6 +131,12 @@ state that intentionally lags a frame to avoid a GPU→CPU readback stall.
 - **SVP frames** skip blur/SSFX-bloom/SSR/etc. — second-viewport rendering (e.g. scopes/mirror views)
   takes a reduced chain.
 - **MSAA** uses separate RTs + shader variants with resolve steps interleaved.
+- **The emissive pre-pass excludes the HUD** (repo fix, "Fix SSS Bloom"). `CRender::Render` fills
+  `rt_ssfx_bloom_emissive` with `GMBase.r_dsgraph_render_emissive(true, false)` — the second argument
+  (HUD geometry) is deliberately `false`, because the HUD is already in the scene texture the bloom
+  build pass samples; passing `true` made every strict-sorted HUD surface act as an emissive source
+  and bloomed the weapon/HUD. If HUD elements suddenly glow, check this call first
+  (`xrRenderPC_R4/r4_R_render.cpp`).
 
 ## Deeper
 

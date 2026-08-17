@@ -1,9 +1,9 @@
 ---
 domain: flows/stalker-execution
 tags: [xrgame, ai, stalker, movement, sight, animation, fire, flow]
-sources: [src/xrGame/ai/stalker/ai_stalker.h, src/xrGame/ai/stalker/ai_stalker.cpp, src/xrGame/ai/stalker/ai_stalker_fire.cpp, src/xrGame/sight_manager.cpp, src/xrGame/stalker_animation_manager.cpp, src/xrGame/movement_manager.cpp, src/xrGame/detail_path_manager.cpp]
-related: [flows/ai-planner.md, flows/ai-perception.md, flows/smart-cover.md, flows/weapon-fire-callbacks.md, flows/animation-callbacks.md, flows/monster-ai-control.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-06
+sources: [src/xrGame/ai/stalker/ai_stalker.h, src/xrGame/ai/stalker/ai_stalker.cpp, src/xrGame/ai/stalker/ai_stalker_inline.h, src/xrGame/ai/stalker/ai_stalker_fire.cpp, src/xrGame/ai/stalker/ai_stalker_cover.cpp, src/xrGame/sight_manager.cpp, src/xrGame/sight_action.cpp, src/xrGame/stalker_combat_planner.cpp, src/xrGame/stalker_combat_action_base.cpp, src/xrGame/action_planner.h, src/xrGame/stalker_animation_manager.cpp, src/xrGame/movement_manager.cpp, src/xrGame/detail_path_manager.cpp, gamedata/scripts/callbacks_gameobject.script, gamedata/scripts/lua_help_ex.script]
+related: [flows/ai-planner.md, flows/ai-perception.md, flows/smart-cover.md, flows/weapon-fire-callbacks.md, flows/animation-callbacks.md, flows/monster-ai-control.md, flows/damage-hit.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -58,6 +58,49 @@ class and distance. **NPC weapons are world objects on a skeleton bone** (not th
 `g_fireParams` reads the bone; the weapon's own `FireStart`/bullet pipeline
 (`flows/weapon-fire-callbacks.md`) does the rest. `fire_make_sense` raycasts LOS before bothering.
 
+## Repo-added per-NPC combat levers & veto hooks (verified)
+
+All per-NPC state lives on `CAI_Stalker`, is **not serialized** (re-apply on spawn), and uses the
+convention *negative component = unset → fall back to the global cvar / vanilla constant*, so an
+untouched NPC behaves exactly as before. The Lua surface is catalogued in
+`gamedata/scripts/lua_help_ex.script`.
+
+- **`npc:set_aim_params(max_angle, min_angle, min_speed, predict_time)`** — the aim swing curve and
+  target lead, read *per frame* by `CSightManager::Exec_Look` (all four `angle_lerp_bounds` calls now
+  take `m_object->aim_min_speed()/aim_min_angle()/aim_max_angle()` instead of the `g_ai_aim_*`
+  globals) and by `CSightAction::predict_object_position` (`aim_predict_time`). Getters live in
+  `ai_stalker_inline.h`.
+  **Behaviour change even with no script involved:** the lead used to be `Device.fTimeDelta` (i.e.
+  ~one frame, effectively no lead) and the registered `ai_aim_predict_time` cvar was dead. It is now
+  the fallback, default **0.40 s**, so every NPC leads moving targets unless the cvar is set back
+  toward zero.
+- **`npc:set_fire_queue_scale(size_k, interval_k)`** — applied in
+  `CStalkerActionCombatBase::select_queue_params` *after* the weapon-class × distance band is picked,
+  so `[fire_queue_params]` retunes stay respected; scaled size clamps to ≥ 1 (a sub-1 scale degrades
+  to single shots, never to silence). Only the planner's queues — script `set_item` queues, the death
+  mag dump and player weapons are untouched.
+- **Fire-gate readers** (`can_kill_enemy`, `can_kill_member`, `fire_make_sense`) expose the engine's
+  own decision functions against the NPC's *currently selected* enemy, so a script can ask the same
+  question the planner asks instead of re-raycasting in Lua. `can_kill_*` return false with no active
+  item (no weapon out → no fire point); they share the engine's once-per-frame cache with the
+  friendly-fire gate. `fire_make_sense` is the discipline gate (occlusion before target, floor-gap,
+  point-blank, unseen-enemy interval + automatic weapon).
+- **`npc:g_fireParams()`** returns a `{pos, dir}` table from the actor's or stalker's `g_fireParams`,
+  i.e. the same eye/bone-derived fire ray the engine shoots along.
+- **`npc_on_combat_action_switch(npc, from_op, to_op, flags)`** — a *veto* fired **before** the combat
+  planner swaps GOAP actions, via the new virtual `CActionPlanner::allow_action_switch` (default
+  `true`, so every other planner is unchanged) overridden by `CStalkerCombatPlanner`. Setting
+  `flags.allow = false` keeps the current action executing; the existing
+  `npc_on_combat_action_changed` fires only *after* an allowed swap, so a denied switch is silent.
+  Re-asked every brain update while the proposed switch stays denied — keep subscribers cheap. The
+  motivating case is the take_cover ↔ look_out oscillation.
+- **`npc_on_best_cover_repick(npc, flags)`** — a veto inside `CAI_Stalker::best_cover`, fired only
+  when a cover is already held, *before* `on_best_cover_changed` clears the cover properties
+  (`InCover`/`LookedOut`/`PositionHolded`). `flags.allow = false` keeps `m_best_cover`. Also re-asked
+  on every subsequent invalidation, and two standing invalidators (enemy within ~3 m of the held
+  cover, a smart cover without a loophole) re-ask on each combat action update — a subscriber that
+  denies unconditionally must cap itself.
+
 ## Animation (agent-traced)
 
 `CStalkerAnimationManager` selects global/head/torso/legs animation **parts** from {movement type, body
@@ -86,7 +129,10 @@ animation-callback timeline (`flows/animation-callbacks.md`).
 - **Pathfinding/physics:** game/level/detail path managers → physics character movement.
 - **Smart cover:** the movement manager is the smart-cover variant (`flows/smart-cover.md`).
 - **Lua:** `_g.CAI_Stalker__GetWeaponAccuracy` (accuracy override), `_G.CNPCBeforeLookAtActor`,
-  `_g.CAI_Stalker__BeforeHitCallback`, `_g.update_best_weapon`.
+  `_g.CAI_Stalker__BeforeHitCallback`, `_g.update_best_weapon`; the repo's veto functors
+  `_G.CAI_Stalker__AllowCombatActionSwitch` and `_G.CAI_Stalker__AllowCoverRepick` (bridged to the
+  `npc_on_combat_action_switch` / `npc_on_best_cover_repick` bus callbacks), the reload pair
+  `_G.CAI_Stalker__OnWeaponReloadStart`/`Stop`, and the per-NPC setters/readers above.
 - **Config:** per-NPC dispersion by state (`disp_*`), `fire_queue_section` (burst sizes/intervals by
   weapon class + distance), rank dispersion.
 

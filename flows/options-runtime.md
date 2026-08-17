@@ -1,9 +1,9 @@
 ---
 domain: flows/options-runtime
 tags: [modlayer, lua, options, ui, dxml, console, config, flow]
-sources: [gamedata/scripts/options_builder.script, gamedata/scripts/options_modded_exes.script, gamedata/scripts/ui_options_modded_exes.script, gamedata/scripts/dxml_core.script, unpacked/scripts/ui_options.script]
-related: [flows/dxml-xml-interception.md, flows/lua-callback-lifecycle.md, flows/sound-music.md, flows/plugins-tweaks-presets-configs.md, modlayer/options-ui.md, modlayer/scripting.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [gamedata/scripts/options_builder.script, gamedata/scripts/options_modded_exes.script, gamedata/scripts/ui_options_modded_exes.script, gamedata/scripts/dxml_core.script, gamedata/configs/text/eng/ui_mm_modded_exes.xml, gamedata/scripts/lua_help_ex.script, src/xrGame/console_commands.cpp, src/Layers/xrRender/xrRender_console.cpp, unpacked/scripts/ui_options.script]
+related: [flows/dxml-xml-interception.md, flows/lua-callback-lifecycle.md, flows/sound-music.md, flows/plugins-tweaks-presets-configs.md, flows/renderer-resources-shaders.md, modlayer/options-ui.md, modlayer/scripting.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -113,10 +113,35 @@ queries of the cvar (engine boundary), and script-only options via `axr_main.con
   render/cache/apply class). The mod layer extends it via the `on_xml_read` wrapper rather than
   replacing it.
 
+## Adding a row: the four-file checklist (worked from recent additions)
+
+Every option added recently touched exactly these places, and missing one is the usual "my option does
+not show up / shows a raw id" bug:
+
+1. the **cvar** — `CMD4(CCC_Integer, "<name>", &<global>, lo, hi)` in `console_commands.cpp`
+   (gameplay) or `xrRender_console.cpp` (`r__*` renderer vars);
+2. the **row** — `list_bool { id = "<name>" }` or `track { id = "<name>", def, step }` in the right
+   `options_modded_exes_*.script` page. Rows for cvars that may not exist in every exe are wrapped in
+   `get_item_if_exists` (that is how the renderer eviction rows are written);
+3. the **label** — `ui_mm_modded_exes_<page-path>_<name>` (plus optional `_desc`) in
+   `gamedata/configs/text/eng/ui_mm_modded_exes.xml` **and** the `rus/` copy; the label text
+   conventionally repeats the cvar name in parentheses;
+4. the **doc line** — the cvar list at the top of `gamedata/scripts/lua_help_ex.script`.
+
+Recent examples to copy: `allow_accel_during_lookout` (gameplay/general),
+`scale_hud_motion_marks_by_speed` (gameplay/weapons), `pseudogiant_dodge_stomp_while_falling`
+(gameplay/monsters), `r__tex_evict_enabled` / `_age_frames` / `_batch_size` (optimizations,
+`flows/renderer-resources-shaders.md`).
+
 ## Failure & edge cases
 
 - **`get_opt_table` on a group returns nothing** — the monitor/weather insertions deliberately walk the
   tree by `id` instead (this is the recurring `ui_options` quirk; see the memory).
+- **A `track` row's `def`/`step` are not validated against the cvar's range.** The shipped
+  `r__tex_evict_age_frames` / `r__tex_evict_batch_size` rows both declare `def = 1024, step = 32`,
+  which is outside the batch-size cvar's 10–1000 clamp — the engine clamps, the row lies. Read the
+  `CMD4` bounds, not the row, when documenting a value.
+- **`r__tex_evict_interval` has a cvar but no row**, so it is console/user.ltx only.
 - **Slider bounds depend on the cvar existing** — `track` reads `get_variable_bounds`; a non-string or
   unknown `cmd` nils the command and the bounds are skipped.
 - **Restart-required options** only set flags (`Need_Restart`/`Need_VidRestart`); they don't force a

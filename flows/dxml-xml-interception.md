@@ -2,8 +2,8 @@
 domain: flows/dxml-xml-interception
 tags: [modlayer, lua, dxml, flow, lifecycle]
 sources: [src/xrXMLParser/xrXMLParser.cpp, src/xrGame/ScriptXMLInit.cpp, gamedata/scripts/dxml_core.script, DXML.md, gamedata/scripts/slaxml.script]
-related: [modlayer/dxml.md, flows/lua-callback-lifecycle.md, engine/subsystems-misc.md, METHODOLOGY.md, GLOSSARY.md]
-updated: 2026-06-05
+related: [modlayer/dxml.md, flows/lua-callback-lifecycle.md, flows/pda-map-news.md, engine/subsystems-misc.md, METHODOLOGY.md, GLOSSARY.md]
+updated: 2026-08-17
 ---
 
 # Flow: DXML XML interception
@@ -118,10 +118,38 @@ results. See `modlayer/dxml.md` and example `modxml_*.script` files.
   callbacks**; don't cache files other mods may also edit.
 - The `on_xml_read` name is invisible in `axr_main.intercepts` (it lives in `xmlCallbacks`).
 
+## The `parent` invariant (mutation correctness, 2026-08 fixes)
+
+Every node in a DXML tree carries a `parent` back-pointer, and the mutation helpers rely on it —
+`insertElement` (before/after), `removeElement` and the sibling selectors all navigate *upward* first.
+The 2026-08 correctness pass in `dxml_core.script` made maintaining it a rule rather than an accident:
+
+- a local recursive `setParent(node, parent)` is applied on **every** insertion path
+  (`insertElementIn*`, before/after, `insertFromXMLString`), so a subtree inserted from a parsed string
+  has parents all the way down, not just at its root; `setText` fixes up the text child it creates; and
+  `removeElement` **clears** the removed node's parent.
+- `slaxml.script` sets `parent` on the processing-instruction node it pushes (`?xml …`), which
+  previously had none.
+- `insertElement` used to insert into `el.parent` itself rather than `el.parent.kids` (corrupting the
+  node) and computed its position by iterating; it now bails with a parser error when the target has no
+  usable parent, and uses `getElementPosition`.
+- `insertFromXMLString` creates `where.kids` if absent, returns early on an empty source document, and
+  inserts the source's children **in order** at the requested position (it previously reversed them by
+  re-clamping per child).
+- the `+` (next sibling) selector unwraps `findFirstSibling`'s result list instead of storing the list
+  itself as the match.
+
+**Reverted, deliberately:** an earlier commit in the same pass made *malformed closing tags* acceptable
+in `slaxml`; it broke existing mods and was reverted the same week. Malformed XML is a parse error
+again (and a parse error means the whole file silently keeps its original content — see below).
+
 ## Subtleties
 
 - Two senses of `on_xml_read`: (1) a *module function* `module.on_xml_read()` called once at gather
   time (init), and (2) the *callback name* a module registers a per-file handler under. Don't conflate.
+- **A mutation helper that reports "target element has no parent"** means the node did not come from
+  this tree (e.g. it was built by hand, or removed earlier) — find it with `query`/`findElement` on the
+  live `xml_obj` instead of reconstructing it.
 - `dxml_core` exists in both `unpacked/scripts/` (base) and `gamedata/scripts/` (repo override);
   document/verify against the repo copy.
 

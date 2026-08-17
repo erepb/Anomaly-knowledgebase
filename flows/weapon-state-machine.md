@@ -1,9 +1,9 @@
 ---
 domain: flows/weapon-state-machine
 tags: [engine, cpp, weapons, hud, animation, flow, state-machine, callbacks]
-sources: [src/xrGame/HudItem.h, src/xrGame/HudItem.cpp, src/xrGame/Weapon.h, src/xrGame/Weapon.cpp, src/xrGame/WeaponMagazined.h, src/xrGame/WeaponMagazined.cpp, src/xrGame/WeaponFire.cpp]
-related: [flows/weapon-fire-callbacks.md, flows/object-lifecycle.md, flows/inventory.md, flows/actor.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [src/xrGame/HudItem.h, src/xrGame/HudItem.cpp, src/xrGame/Weapon.h, src/xrGame/Weapon.cpp, src/xrGame/WeaponMagazined.h, src/xrGame/WeaponMagazined.cpp, src/xrGame/WeaponAK74.cpp, src/xrGame/WeaponFire.cpp, gamedata/scripts/callbacks_gameobject.script]
+related: [flows/weapon-fire-callbacks.md, flows/object-lifecycle.md, flows/inventory.md, flows/actor.md, flows/stalker-execution.md, flows/animation-callbacks.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -92,6 +92,15 @@ fire key during reload sets `m_pendingShot`, replayed on entry to `eIdle` (`swit
 misfire path uses `anim_reload_misfire` + `bClearJamOnly`. *(bodies agent-traced; the
 mark-or-end → `ReloadMagazine` → eIdle structure is the load-bearing part.)*
 
+**NPC reload edges** (repo addition). `CWeapon::OnStateSwitch` fires `_G.CAI_Stalker__OnWeaponReloadStart`
+/ `_OnWeaponReloadStop` (bridged to the `npc_on_weapon_reload_start` / `_stop` bus callbacks) whenever
+`eReload` is entered or left **and the weapon's parent is a `CAI_Stalker`**. Two deliberate choices:
+the hook sits in `CWeapon::OnStateSwitch` rather than `CWeaponMagazined`'s override, because the
+tri-state shotgun path skips that override for `eReload`, and the actor is excluded because actor
+reloads already surface as `actor_on_weapon_reload`. The stop edge is **best-effort**: a weapon detached
+mid-reload (owner died, weapon dropped) has no stalker parent and fires nothing — `wpn:get_state() ==
+7` (`eReload`) stays the authoritative read.
+
 ## Fire detail (state side only)
 
 `kWPN_FIRE` start → `CWeapon::FireStart`/`switch2_Fire` sets the shot counters; the actual cadence
@@ -104,11 +113,16 @@ callbacks are documented in `flows/weapon-fire-callbacks.md`.
 ## Isolation ledger (the seams)
 
 - **Callbacks fired:** Lua functors `_G.CHudItem__PlayHUDMotion` (can return `$cancel` to abort an
-  animation), `_G.CHudItem__OnStateSwitch`, `_G.CHudItem__OnMotionMark`; per-object weapon callbacks
+  animation), `_G.CHudItem__OnStateSwitch`, `_G.CHudItem__OnMotionMark`,
+  `_G.CAI_Stalker__OnWeaponReloadStart`/`Stop` (NPC-only, above); per-object weapon callbacks
   `eOnWeaponZoomIn`/`Out`, `eWeaponNoAmmoAvailable`, and (in `flows/weapon-fire-callbacks.md`)
   `eOnWeaponFired`/`eOnWeaponJammed`/`eOnWeaponMagazineEmpty`; and `eActorHudAnimationEnd` fired by
   `CHudItem::OnAnimationEnd` when the parent is the actor. *(functor names agent-traced; the
   `OnAnimationEnd`/`UpdateCL` driver is verified.)*
+- **Lua surface (repo additions):** `obj:hud_inertion_enabled()` / `set_hud_inertion_enabled(bool)`
+  toggle the `CHudItem` `fl_inertion_enable` flag (HUD sway/inertia) per item at runtime;
+  `wpn:get_CurrentFirePoint()` / `_2()` / `_Silencer()` expose the live fire points; the motion-mark
+  timing cvar is `scale_hud_motion_marks_by_speed` (`flows/animation-callbacks.md`).
 - **Config read (weapon `.ltx`):** the `anim_*` clip names (show/hide/reload/shot/idle, with
   `_empty`/`_aim`/`_l` variants), fire rate (`rpm`/`rpm_mode_2` → shot timers), `fire_modes`,
   `magazine_size`, `ammo_type` list, misfire condition/probability params, addon names. *(key names

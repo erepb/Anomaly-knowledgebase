@@ -1,9 +1,9 @@
 ---
 domain: flows/monster-ai-control
 tags: [xrgame, ai, monster, control, fsm, state, animation, flow]
-sources: [src/xrGame/ai/monsters/control_manager.cpp, src/xrGame/ai/monsters/control_manager.h, src/xrGame/ai/monsters/control_combase.h, src/xrGame/ai/monsters/control_animation.cpp, src/xrGame/ai/monsters/control_movement.cpp, src/xrGame/ai/monsters/control_jump.cpp, src/xrGame/ai/monsters/basemonster/base_monster.h, src/xrGame/ai/monsters/basemonster/base_monster_think.cpp, src/xrGame/ai/monsters/monster_enemy_manager.cpp]
-related: [flows/ai-planner.md, flows/ai-perception.md, flows/animation-callbacks.md, flows/ai-squad-logic.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-06
+sources: [src/xrGame/ai/monsters/control_manager.cpp, src/xrGame/ai/monsters/control_manager.h, src/xrGame/ai/monsters/control_combase.h, src/xrGame/ai/monsters/control_animation.cpp, src/xrGame/ai/monsters/control_movement.cpp, src/xrGame/ai/monsters/control_jump.cpp, src/xrGame/ai/monsters/basemonster/base_monster.h, src/xrGame/ai/monsters/basemonster/base_monster_think.cpp, src/xrGame/ai/monsters/monster_enemy_manager.cpp, src/xrGame/ai/monsters/pseudogigant/pseudo_gigant.cpp, src/xrGame/ai/monsters/burer/burer_state_attack_tele.h, src/xrGame/ai/monsters/burer/burer_state_attack_tele_inline.h]
+related: [flows/ai-planner.md, flows/ai-perception.md, flows/animation-callbacks.md, flows/ai-squad-logic.md, flows/options-runtime.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -109,6 +109,18 @@ scheduled object update (`flows/object-lifecycle.md`). Bone calc is the usual wo
   pass — a monster that "won't attack" usually fails a start condition.
 - **Per-species FSM:** each monster type has its own states; generic control behavior + species FSM is
   the split to keep straight.
+- **Species-specific behaviour is cvar-gated in this repo.** Two examples to copy when adding one:
+  `pseudogiant_can_damage_objects_on_stomp` and `pseudogiant_dodge_stomp_while_falling` (both globals in
+  `ai/monsters/pseudogigant/pseudo_gigant.cpp`, registered in `console_commands.cpp`, exposed as
+  options rows). The second makes `CPseudoGigant::on_threaten_execute` treat `mcFall` like the
+  already-exempt `mcJump`, i.e. a falling actor dodges the earthquake stomp; default **off**, so vanilla
+  behaviour is unchanged unless enabled.
+- **An ability that holds a pointer to another object must implement `remove_links`.** The burer
+  telekinesis crash is the worked example: `CStateBurerAttackTele` kept `selected_object` (the thing it
+  is throwing) across updates, so a destroyed target left a dangling pointer. The fix overrides
+  `remove_links` to null it and drop `ACTION_TELE_FIRE` back to `ACTION_TELE_CONTINUE`, plus a
+  defensive `!selected_object || getDestroy()` early-out in `ExecuteTeleFire`. Any new ability caching
+  an object pointer needs the same pair.
 
 ## Deeper
 

@@ -1,9 +1,9 @@
 ---
 domain: flows/hud-ui-load
 tags: [xrgame, ui, hud, xml, cuiwindow, dxml, shaders, flow]
-sources: [src/xrXMLParser/xrXMLParser.cpp, src/xrGame/ScriptXMLInit.cpp, src/xrGame/ui/UIXmlInit.cpp, src/xrGame/ui/UIWindow.cpp, src/xrGame/ui/UIStatic.cpp, src/xrGame/UIStaticItem.cpp, src/xrGame/UIGameCustom.cpp, gamedata/shaders/r3/hud_default.ps, gamedata/shaders/r3/hud_font.ps]
-related: [flows/dxml-xml-interception.md, flows/engine-boot-frame.md, flows/lua-callback-lifecycle.md, flows/renderer-factory-bridges.md, flows/pda-map-news.md, modlayer/dxml.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-22
+sources: [src/xrXMLParser/xrXMLParser.cpp, src/xrGame/ScriptXMLInit.cpp, src/xrGame/ui/UIXmlInit.cpp, src/xrGame/ui/UIWindow.cpp, src/xrGame/ui/UIWindow.h, src/xrGame/ui/UIWindow_script.cpp, src/xrGame/ui/uiscriptwnd_script.h, src/xrGame/ui/UI3tButton.cpp, src/xrGame/ui/UIStatic.cpp, src/xrGame/UIStaticItem.cpp, src/xrGame/UIGameCustom.cpp, gamedata/scripts/lua_help_ex.script, gamedata/shaders/r3/hud_default.ps, gamedata/shaders/r3/hud_font.ps]
+related: [flows/dxml-xml-interception.md, flows/engine-boot-frame.md, flows/lua-callback-lifecycle.md, flows/renderer-factory-bridges.md, flows/pda-map-news.md, flows/ui-scaling.md, features/pda-tab-scroll.md, modlayer/dxml.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -84,6 +84,33 @@ neighbours (a `clamp` sampler on `hud\default`; `hud\font` relies on the rect + 
 edges). Map spots use exactly this machinery — `flows/pda-map-news.md` for `location_level` z-order
 and stacking an outline spot under an icon.
 
+## Repo additions to the widget/Lua contract (verified)
+
+Ownership, input and hit-testing gained a few seams that mod UIs depend on. All are catalogued from the
+Lua side in `gamedata/scripts/lua_help_ex.script`.
+
+- **`AttachChildKeepOwner`** (`UIWindow_script.cpp`) — the same `CUIWindow::AttachChild`, exported
+  *without* luabind's `adopt<2>` policy. `AttachChild` transfers ownership to C++, which is wrong when
+  attaching a **Lua-owned** window into an engine window (the engine would free a script object). Use
+  `AttachChild` for engine-owned children, `AttachChildKeepOwner` when Lua keeps the reference.
+- **`OnMouse` script hook** — `CWrapperBase` (`uiscriptwnd_script.h`) now wraps
+  `OnMouseAction` the way it already wrapped `OnKeyboardAction`, so a `CUIScriptWnd` subclass can
+  implement `OnMouse(x, y, action)` and call the base through the exported static. This is what makes
+  wheel/scroll handling possible in script windows (`CUIScrollView`/`CUIScrollBar` hooks).
+- **Convex hit clipping** — `CUIWindow::SetHitClip(pts, count)` / `HitClipPass(abs_pos)`
+  (`UIWindow.h`): an optional convex polygon in absolute coords, AND-gated on top of the normal rect
+  test in both `Update` (hover) and the parent's `OnMouseAction` child routing, so hover and click can
+  never disagree. Degenerate input clears it. Built for the slanted PDA tabs
+  (`features/pda-tab-scroll.md`), but it is a general widget facility.
+- **Custom-draw backgrounds** — `CUI3tButton::InitButton` marks its static/frameline background
+  `SetCustomDraw(true)` because `DrawTexture` paints it and the child list is drawn afterwards;
+  without that a background paints twice, over anything layered on the button face.
+- **List/properties-box exports** — `CUIPropertiesBox::AddHeader` / `AddSubmenu` / `AddItem(text, id)`
+  and `CUIListBoxItem::Get/SetTAG` (`flows/pda-map-news.md` documents the menu shape they enable).
+- **Frame-line rendering gained two opt-ins** (cap scaling, crisp `border_*` bands) plus an explicit
+  `vertical` argument on `CUIInteractiveBackground::InitState`, since a frameline must know its
+  orientation before `InitTexture` asserts on slice dimensions — see `flows/ui-scaling.md`.
+
 ## Isolation ledger (the seams)
 
 - **DXML interception (every XML):** `CXml::Load` → `XMLLuaCallback` → `_G.COnXmlRead` →
@@ -91,6 +118,8 @@ and stacking an outline spot under an icon.
   `modlayer/dxml.md`); it runs once per file load, synchronous, before widget construction.
 - **Lua UI binding:** `CScriptXmlInit` exposes the `CUIXmlInit` initializers to Lua; `CUIScriptWnd`
   is the Lua-scriptable window base; button callbacks are Lua functors. Mod UIs build widgets this way.
+  Ownership choice is `AttachChild` (adopt) vs `AttachChildKeepOwner` (no adopt); overridable virtuals
+  reaching Lua now include `OnMouse` alongside `OnKeyboard`/`Update`.
 - **Frame-loop integration:** the game UI is driven from `CHUDManager` on the engine's `seqFrame`/
   `seqRender` registrators (`flows/engine-boot-frame.md`) — `Update` in the frame phase, `Draw` in the
   render phase, both on the main thread.

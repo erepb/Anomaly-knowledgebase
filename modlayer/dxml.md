@@ -1,9 +1,9 @@
 ---
 domain: modlayer/dxml
 tags: [modlayer, lua, dxml]
-sources: [DXML.md, gamedata/scripts/dxml_core.script, gamedata/scripts/modxml_test.script, gamedata/scripts/slaxml.script]
-related: [modlayer/_overview.md, modlayer/scripting.md, flows/dxml-xml-interception.md, engine/subsystems-misc.md, GLOSSARY.md]
-updated: 2026-06-04
+sources: [DXML.md, gamedata/scripts/dxml_core.script, gamedata/scripts/modxml_test.script, gamedata/scripts/modxml_fix_faction_spot_size.script, gamedata/scripts/slaxml.script]
+related: [modlayer/_overview.md, modlayer/scripting.md, flows/dxml-xml-interception.md, flows/pda-map-news.md, engine/subsystems-misc.md, GLOSSARY.md]
+updated: 2026-08-17
 ---
 
 # DXML — XML manipulation from Lua
@@ -42,6 +42,20 @@ examples.
 DXML does NOT process translation strings outside `eng/`/`rus/` folders and
 `gameplay\character_desc_general.xml` (per DXML.md "Additional functions"). For those, use the
 dedicated functions described in DXML.md.
+
+Malformed XML (including an unbalanced closing tag) is a **parse error** — leniency for that was added
+and then reverted in 2026-08 because it broke mods — and a parse error makes `COnXmlRead` return the
+file's original string, so a bad edit silently no-ops.
+
+## Mutation correctness (2026-08)
+
+The insert/remove/selector helpers were fixed to keep each node's `parent` back-pointer valid
+(recursive `setParent` on every insertion path, cleared on removal, set for the `?xml` node);
+`insertElement` no longer inserts into the parent node itself, `insertFromXMLString` preserves source
+order, and the `+` next-sibling selector unwraps its result properly. Practical consequence for
+patchers: pass helpers a node you got from `query`/`findElement` on the live `xml_obj` — a hand-built
+or already-removed node has no parent and now fails with a logged parser error instead of corrupting
+the tree. Mechanism detail: `flows/dxml-xml-interception.md`.
 
 ## Deeper
 

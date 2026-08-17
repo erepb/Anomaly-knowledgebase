@@ -1,9 +1,9 @@
 ---
 domain: engine/core
 tags: [engine, cpp, scheduler, imgui]
-sources: [src/xrEngine/device.cpp, src/xrEngine/XR_IOConsole.h, src/xrEngine/IInputReceiver.h, src/xrEngine/xr_input.h, src/xrEngine/xrSheduler.h, src/xrEngine/xrSheduler.cpp]
+sources: [src/xrEngine/device.cpp, src/xrEngine/XR_IOConsole.h, src/xrEngine/XR_IOConsole_callback.cpp, src/xrEngine/line_edit_control.h, src/xrEngine/line_edit_control.cpp, src/xrEngine/IInputReceiver.h, src/xrEngine/xr_input.h, src/xrEngine/xrSheduler.h, src/xrEngine/xrSheduler.cpp]
 related: [engine/_overview.md, engine/renderer.md, modlayer/scripting.md, flows/engine-boot-frame.md, flows/lua-callback-lifecycle.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-08-17
 verified: code
 ---
 
@@ -25,6 +25,16 @@ are verified from the named files, including the scheduler update internals.
 - **Console** — `class ENGINE_API CConsole` (`XR_IOConsole.h`) with `Execute(cmd)`,
   `ExecuteScript`, `ExecuteCommand`. Lua `get_console():execute(...)` reaches this.
   Command files: `XR_IOConsole*.cpp`, `Text_Console*.cpp`.
+  **Key bindings** are a table: `assign_callback(DIK, key_state, Callback)` on the `line_edit_control`
+  (`ec()`), where `key_state` is a `text_editor::key_state` bit mask (`line_edit_control.h`). The console's
+  own shortcuts live in `CConsole::Register_callbacks` (`XR_IOConsole_callback.cpp`), the text-editing
+  ones in `line_edit_control::assign_callbacks`. Adding a shortcut is one `assign_callback` line.
+  The repo added **numpad support**: a new `ks_NumLock` bit plus the combos `ks_NumLk_Ctrl` /
+  `ks_NumLk_Alt`, wiring numpad 7/1/4/6 to home/end/left/right (line editing) and 9/3 to log
+  prev/next + tips paging. **Careful with the sense of the bit:**
+  `line_edit_control::get_num_lock_state()` returns true when NumLock is *off*
+  (`(GetKeyState(VK_NUMLOCK) & 1) == 0`), because the navigation role is the NumLock-off role in normal
+  apps — so `ks_NumLock` in a mask reads as "numpad is in navigation mode", not "NumLock is lit".
 - **Input** — `class ENGINE_API IInputReceiver` (`IInputReceiver.h`) with virtual
   `IR_OnKeyboardPress(int dik)`; device input in `xr_input.h`/`Xr_input.cpp`. *(Note: the Lua
   `on_key_press`/`on_key_release` callbacks are fired from `xrGame/Level_input.cpp` and engine

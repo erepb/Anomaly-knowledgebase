@@ -1,9 +1,9 @@
 ---
 domain: flows/upgrade-system
 tags: [xrgame, upgrade, inventory, weapon, outfit, ltx, money, flow]
-sources: [src/xrGame/inventory_upgrade_manager.cpp, src/xrGame/inventory_upgrade_manager.h, src/xrGame/inventory_upgrade.cpp, src/xrGame/inventory_upgrade_group.cpp, src/xrGame/inventory_upgrade_base.h, src/xrGame/inventory_item_upgrade.cpp, src/xrGame/inventory_item_inline.h, src/xrGame/WeaponUpgrade.cpp, src/xrGame/CustomOutfit.cpp]
-related: [flows/weapon-hierarchy-addons.md, flows/outfit-helmet.md, flows/inventory.md, flows/dialog-trade.md, flows/items-weapons-outfits-configs.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [src/xrGame/inventory_upgrade_manager.cpp, src/xrGame/inventory_upgrade_manager.h, src/xrGame/inventory_upgrade.cpp, src/xrGame/inventory_upgrade_group.cpp, src/xrGame/inventory_upgrade_base.h, src/xrGame/inventory_item_upgrade.cpp, src/xrGame/inventory_item_inline.h, src/xrGame/WeaponUpgrade.cpp, src/xrGame/CustomOutfit.cpp, gamedata/scripts/aaaa_script_fixes_mp.script]
+related: [flows/weapon-hierarchy-addons.md, flows/outfit-helmet.md, flows/inventory.md, flows/dialog-trade.md, flows/items-weapons-outfits-configs.md, modlayer/unlocalizer.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -94,6 +94,26 @@ one of two templates that read a `CInifile` member-pointer getter from the secti
   immunities section, ruck/sprint flags).
 Both no-op (return false) if the line is absent or empty, and when `test` is set they read without
 mutating. This additive-vs-replace split is the single fact that explains all upgrade math.
+
+## Mountable scopes granted by an upgrade (repo addition, Lua layer)
+
+The engine already lets an upgrade `process_if_exists_set` the weapon's `scopes` field, but the *mod
+layer* gated attachment separately: `item_weapon.check_scope(addon_sect, weapon_sect)` only consults the
+weapon **section's** `scopes` list, so a scope granted by an upgrade could not be mounted. The repo
+patches this in `gamedata/scripts/aaaa_script_fixes_mp.script` (base-script override territory —
+`modlayer/unlocalizer.md`):
+
+- `item_weapon.attach_scope` and `item_weapon.on_item_drag_dropped` are wrapped to stash the
+  (item, weapon) pair in module locals for the duration of the call, because `check_scope` receives only
+  *sections* and needs the live weapon to inspect its upgrades;
+- the wrapped `check_scope` falls back to iterating `weapon:iterate_installed_upgrades`, reading each
+  upgrade's `section` → that section's `scopes` list (`get_scopes_from_upgrade`), and accepting the addon
+  if it appears there;
+- `ActorMenu_on_item_focus_receive` highlights those upgrade-granted scopes in every relevant drag-drop
+  list when the weapon is focused, so the player can see what now fits.
+
+Consequence for content: an upgrade can hand a weapon a new mountable scope by declaring `scopes` on
+the section it sets — no weapon-section edit and no engine change needed.
 
 ## Storage & persistence (verified)
 

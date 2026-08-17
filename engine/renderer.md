@@ -1,9 +1,9 @@
 ---
 domain: engine/renderer
 tags: [engine, renderer, shaders, r1, r2, r3, r4, dx9, dx10, dx11, blender, spom]
-sources: [src/Layers/, src/Layers/xrAPI/xrAPI.cpp, src/Layers/xrRender/ResourceManager_Resources.cpp, src/Layers/xrRenderPC_R4/r4.h, src/Layers/xrRenderPC_R3/r3.h, src/Layers/xrRenderPC_R4/blender_blur.h, src/Layers/xrRenderPC_R4/blender_dof.cpp]
+sources: [src/Layers/, src/Layers/xrAPI/xrAPI.cpp, src/Layers/xrRender/ResourceManager.cpp, src/Layers/xrRender/ResourceManager_Resources.cpp, src/Layers/xrRenderPC_R4/r4.h, src/Layers/xrRenderPC_R3/r3.h, src/Layers/xrRenderPC_R4/blender_blur.h, src/Layers/xrRenderPC_R4/blender_dof.cpp]
 related: [engine/_overview.md, flows/render-frame.md, flows/renderer-resources-shaders.md, flows/renderer-blender-compile.md, flows/renderer-scene-graph.md, flows/renderer-visibility.md, flows/renderer-backend.md, flows/renderer-visual-types.md, flows/renderer-skeleton.md, flows/renderer-lighting.md, flows/renderer-sun-shadows.md, flows/renderer-wallmark-engine.md, flows/renderer-particles.md, flows/renderer-environment.md, flows/renderer-detail-grass.md, flows/renderer-hw-device.md, flows/renderer-factory-bridges.md, flows/renderer-r1-path.md, flows/renderer-r2-r3-paths.md, flows/renderer-3dfluid.md, flows/renderer-post-process.md, flows/engine-boot-frame.md, features/spom.md, modlayer/assets.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-08-17
 verified: code
 ---
 
@@ -43,6 +43,11 @@ path (not this build) is `flows/renderer-r1-path.md`; the **R2/R3** deferred gen
   `IRender_interface` (verified: `class CRender : public IRender_interface` (`r4.h`)).
 - **xrRenderDX9 / xrRenderDX10/** — D3D backends. `xrRenderDX10` mixes D3D10 and D3D11 types
   (`DXCommonTypes.h` typedefs both), i.e. it backs both R3 and R4.
+- **Texture lifetime** is owned by `xrRender/ResourceManager.cpp` + the DX10/11 `CTexture`: besides the
+  level-unload sweep, the MT build can **evict idle textures mid-session** (opt-in
+  `r__tex_evict_enabled`, plus `_age_frames` / `_batch_size` / `_interval`, called once every N frames
+  from `CRender::Render` in R4). Details and the async re-load contract:
+  `flows/renderer-resources-shaders.md`.
 - **xrAPI/** — holds the global render interface the engine renders through: `xrAPI.cpp` declares
   `IRender_interface* Render` and `dxRenderFactory* RenderFactory`. The active path is chosen by
   `CEngineAPI` (`src/xrEngine/EngineAPI.cpp`): in this all-in-one build the renderer is fixed at

@@ -1,9 +1,9 @@
 ---
 domain: flows/gameplay-boot
 tags: [modlayer, gameplay, unpacked, lua, boot, callbacks, class-registration, flow]
-sources: [unpacked/scripts/_g.script, unpacked/scripts/axr_main.script, gamedata/scripts/axr_main.script, unpacked/scripts/class_registrator.script, gamedata/scripts/class_registrator_modded_exes.script, unpacked/scripts/game_registrator.script, unpacked/scripts/game_setup.script]
-related: [flows/lua-callback-lifecycle.md, flows/object-lifecycle.md, flows/db-registry.md, flows/scheme-engine-core.md, modlayer/gameplay/_overview.md, modlayer/scripting.md, GLOSSARY.md]
-updated: 2026-06-10
+sources: [unpacked/scripts/_g.script, unpacked/scripts/axr_main.script, gamedata/scripts/axr_main.script, unpacked/scripts/class_registrator.script, gamedata/scripts/class_registrator_modded_exes.script, unpacked/scripts/game_registrator.script, unpacked/scripts/game_setup.script, src/xrGame/GamePersistent.cpp]
+related: [flows/lua-callback-lifecycle.md, flows/object-lifecycle.md, flows/db-registry.md, flows/scheme-engine-core.md, flows/engine-boot-frame.md, modlayer/gameplay/_overview.md, modlayer/scripting.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -65,6 +65,15 @@ stalker → `se_stalker`, monsters → `se_monster`, zones → `se_zones`, items
 (SSRS weapon, stat-mgun, projector). `game_registrator.get_game_clsid` maps the game mode to its clsid
 (`register` is a stub). This is the Lua↔engine factory binding that makes `db`'s `clsid.script_stalker`
 checks meaningful.
+
+### Loading-screen hand-off — `CGamePersistent::game_loaded` (engine side, repo fix)
+Two Lua functors fire at the end of loading, in `CGamePersistent::game_loaded` once
+`Device.dwPrecacheFrame <= 2`: **`_G.OnLoadingScreenKeyPrompt`** (show the "press any key" prompt) and
+**`_G.OnLoadingScreenDismissed`**. The dismissed hook used to live outside the branch that runs when the
+key prompt is used, so with `keypress_on_start 0` it never fired; both now sit in the same block, which
+also resets the mouse state (`pInput->resetMouseState()`) and arms crash saving
+(`crash_saving::save_impl`) at that point. If a mod's "after loading screen" init runs twice or never,
+check this ordering — and note the arming of crash saving is now tied to it.
 
 ## Function digests (spine)
 

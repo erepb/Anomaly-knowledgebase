@@ -1,9 +1,9 @@
 ---
 domain: flows/cscript-game-object
 tags: [xrgame, lua, luabind, game_object, callback, binding, flow]
-sources: [src/xrGame/script_game_object.h, src/xrGame/script_game_object.cpp, src/xrGame/script_game_object_script.cpp, src/xrGame/script_game_object_use.cpp, src/xrGame/script_game_object_inventory_owner.cpp, src/xrGame/GameObject.h, src/xrGame/game_object_space.h]
-related: [flows/lua-callback-lifecycle.md, flows/object-lifecycle.md, flows/relations-info.md, engine/server-entities.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-06
+sources: [src/xrGame/script_game_object.h, src/xrGame/script_game_object.cpp, src/xrGame/script_game_object_script.cpp, src/xrGame/script_game_object_use.cpp, src/xrGame/script_game_object_inventory_owner.cpp, src/xrGame/GameObject.h, src/xrGame/game_object_space.h, gamedata/scripts/lua_help_ex.script, gamedata/scripts/ltx_help_ex.script]
+related: [flows/lua-callback-lifecycle.md, flows/object-lifecycle.md, flows/relations-info.md, flows/ai-perception.md, flows/stalker-execution.md, flows/damage-hit.md, modlayer/scripting.md, engine/server-entities.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -67,6 +67,24 @@ object])`** (verified), and `set_callback(type)` (no fn) clears it. The engine f
 GameObject::eHit)(…)` in the actor). The `ECallbackType` enum (`game_object_space.h`) lists ~60 events
 (`eDeath`/`eHit`/`eUseObject`/`eOnWeaponFired`/`eZoneEnter`/`eTaskStateChange`/…). The Anomaly mod layer
 bridges common ones to the global bus via `callbacks_gameobject.script` (`modlayer/scripting.md`).
+
+## Where the repo's own bindings are documented
+
+The modded exes add bindings continuously (per-NPC AI levers, HUD-item and weapon getters/setters,
+UI classes, car/drone controls). Two rules for finding them:
+
+- **`gamedata/scripts/lua_help_ex.script` is the authoritative catalog** — a comment-only script that
+  lists every added export with its semantics, grouped by class, plus the added console vars; the LTX
+  side is `ltx_help_ex.script`. `README.md`'s changelog names the PR each batch came from. Grep those
+  before grepping C++.
+- The KB documents such a binding in **the flow that owns the behaviour**, not here: per-NPC
+  perception/enemy-selection levers → `flows/ai-perception.md`; aim/fire-queue/fire-gates/veto hooks →
+  `flows/stalker-execution.md`; hit/flinch/regen → `flows/damage-hit.md`; car & drone →
+  `flows/vehicles-holder.md`; UI classes → `flows/hud-ui-load.md` and `features/pda-tab-scroll.md`.
+
+Two recurring conventions in this repo's bindings: a **negative or unset value means "follow the global
+cvar / vanilla constant"**, and per-object levers are **not serialized** — they must be re-applied on
+spawn.
 
 ## Isolation ledger (the seams)
 

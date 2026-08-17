@@ -1,9 +1,9 @@
 ---
 domain: flows/alife-services
 tags: [xrgame, alife, simulator, time, surge, emission, location, flow]
-sources: [src/xrGame/alife_simulator.h, src/xrGame/alife_update_manager.cpp, src/xrGame/alife_time_manager.cpp, src/xrGame/alife_time_manager_inline.h, src/xrGame/alife_surge_manager.cpp, src/xrGame/location_manager.cpp, src/xrGame/alife_combat_manager.cpp]
+sources: [src/xrGame/alife_simulator.h, src/xrGame/alife_simulator_base2.cpp, src/xrGame/alife_update_manager.cpp, src/xrGame/alife_time_manager.cpp, src/xrGame/alife_time_manager_inline.h, src/xrGame/alife_surge_manager.cpp, src/xrGame/alife_spawn_registry_spawn.cpp, src/xrGame/location_manager.cpp, src/xrGame/alife_combat_manager.cpp]
 related: [flows/alife-online-offline.md, flows/save-load.md, flows/engine-boot-frame.md, flows/ai-squad-logic.md, flows/spawns-alife-graphs-configs.md, engine/server-entities.md, GLOSSARY.md]
-updated: 2026-06-06
+updated: 2026-08-17
 verified: code
 ---
 
@@ -102,6 +102,16 @@ The ALife update runs on the engine scheduler (serial; optional MT-ALife batches
   them for offline economy/combat (that's squad/ALife logic + Lua).
 - **Game time is the universal clock:** anything time-gated (task deadlines, day/night) reads
   `game_time()`; messing with the factor affects all of them at once.
+- **Spawn-graph ids are not all valid** (2026 crash fixes, MT). Three guards were added along the
+  spawn path and are the shape of this bug class:
+  `CALifeSpawnRegistry::fill_new_spawns` skips a leaf whose `m_tSpawnID` is `_SPAWN_ID(-1)` instead of
+  pushing it; `CALifeSurgeManager::spawn_new_spawns` now null-checks `spawns().spawns().vertex(*I)`
+  once and `continue`s (it used to dereference it three times inline); and
+  `CALifeSimulatorBase::unregister_object` calls `scheduled().remove(object, true)` **unconditionally**
+  before the online/offline branch, because `m_bOnline` cannot be trusted to reflect scheduler
+  membership during destruction — that was the `CALifeUpdateManager::update` crash. If you touch
+  registration/unregistration order, preserve this: remove from the scheduler first, then decide by
+  online state.
 
 ## Deeper
 

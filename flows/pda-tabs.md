@@ -1,9 +1,9 @@
 ---
 domain: flows/pda-tabs
 tags: [modlayer, gameplay, unpacked, lua, ui, pda, tabs, ranking, radio, flow]
-sources: [unpacked/scripts/pda.script, unpacked/scripts/pda_actor.script, unpacked/scripts/pda_flagger.script, unpacked/scripts/ui_pda_contacts_tab.script, unpacked/scripts/ui_pda_npc_tab.script, unpacked/scripts/ui_pda_radio_tab.script, unpacked/scripts/ui_pda_relations_tab.script, unpacked/scripts/ui_pda_warfare_tab.script, src/xrGame/ui/UIPdaWnd.cpp, src/xrGame/ui/UIRankingWnd.cpp]
-related: [flows/pda-map-news.md, flows/gameplay-ui-screens.md, flows/actor-menu-inventory-ui.md, flows/game-services.md, flows/faction-relations-lua.md, flows/warfare-metagame.md, flows/characters-info-encyclopedia.md, flows/companion-system.md, modlayer/gameplay/ui-scripts.md, GLOSSARY.md]
-updated: 2026-06-12
+sources: [unpacked/scripts/pda.script, unpacked/scripts/pda_actor.script, unpacked/scripts/pda_flagger.script, unpacked/scripts/ui_pda_contacts_tab.script, unpacked/scripts/ui_pda_npc_tab.script, unpacked/scripts/ui_pda_radio_tab.script, unpacked/scripts/ui_pda_relations_tab.script, unpacked/scripts/ui_pda_warfare_tab.script, gamedata/scripts/pda_dynamic_tabs.script, src/xrGame/ui/UIPdaWnd.cpp, src/xrGame/ui/UIRankingWnd.cpp]
+related: [flows/pda-map-news.md, flows/gameplay-ui-screens.md, flows/actor-menu-inventory-ui.md, flows/game-services.md, flows/faction-relations-lua.md, flows/warfare-metagame.md, flows/characters-info-encyclopedia.md, flows/companion-system.md, features/pda-tab-scroll.md, modlayer/gameplay/ui-scripts.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -49,6 +49,28 @@ The hub also carries several engine-called surfaces:
   into `m_data.actor_contacts` (the contacts-tab data source) and fires `actor_on_leave_dialog`.
 - **Quick slots** — `add_quick_slot_items_on_game_start` seeds `slot_0..3` from the actor's
   `quick_item_N` config (F104).
+
+## Dynamic tabs — the section map is extensible (repo addition)
+
+The section map above is no longer closed. `gamedata/scripts/pda_dynamic_tabs.script` (this repo, not
+base game) is a registry that lets a mod add a tab **without overriding `pda_16.xml`**, which is a
+single-owner file and therefore a mod-conflict magnet:
+
+- `pda_dynamic_tabs.register(caption_key, ui_getter, after)` → a registry-assigned section id
+  `ept_dynamic_<n>`; `unregister(id)` removes it. Both work at any time — before a game exists or
+  mid-session.
+- The registry **wraps `pda.set_active_subdialog`**: a registered id calls that entry's `ui_getter()`
+  (same contract as the base hub — return a `CUIScriptWnd`), anything else falls through to the base
+  implementation. This is the one place the base hub's dispatch is extended, and it stacks on the
+  unlocalizer-exposed `pda` module like the rest of the map-menu surface.
+- The engine calls back `pda_dynamic_tabs.build_extra_tabs(tab_control)` from
+  `CUIPdaWnd::Init` / `CUIPdaWnd::RebuildExtraTabs`; the script's own `apply()` triggers the latter
+  through `ActorMenu.get_pda_menu():RebuildTabs()` on every register/unregister.
+- Icons are looked up under the **caption string-table id**, not the tab id, so a PDA reskin can art
+  tabs it does not know about.
+
+Engine mechanics (tab cloning, strip overflow squeeze/scroll, icons, arrows) are in
+`features/pda-tab-scroll.md`. Feature detection from Lua: `CUITabControl.AddTab ~= nil`.
 
 ## pda_actor / pda_flagger — warfare map-menu plugins (read in full)
 

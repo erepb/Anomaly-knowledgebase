@@ -1,9 +1,9 @@
 ---
 domain: flows/ai-perception
 tags: [engine, cpp, ai, perception, memory, vision, sound, flow]
-sources: [src/xrGame/memory_manager.cpp, src/xrGame/memory_manager.h, src/xrGame/visual_memory_manager.cpp, src/xrGame/sound_memory_manager.cpp, src/xrGame/hit_memory_manager.cpp, src/xrGame/danger_manager.h, src/xrGame/enemy_manager.h, src/xrGame/CustomMonster.cpp]
-related: [flows/ai-planner.md, flows/damage-hit.md, flows/object-lifecycle.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [src/xrGame/memory_manager.cpp, src/xrGame/memory_manager.h, src/xrGame/visual_memory_manager.cpp, src/xrGame/visual_memory_manager.h, src/xrGame/sound_memory_manager.cpp, src/xrGame/hit_memory_manager.cpp, src/xrGame/danger_manager.h, src/xrGame/enemy_manager.h, src/xrGame/enemy_manager.cpp, src/xrGame/Actor.cpp, src/xrGame/Actor.h, src/xrGame/CustomMonster.cpp, gamedata/scripts/lua_help_ex.script]
+related: [flows/ai-planner.md, flows/agent-squad-combat.md, flows/damage-hit.md, flows/object-lifecycle.md, flows/cscript-game-object.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -61,6 +61,48 @@ These feed two **derived** managers the planner actually reads:
 So: **raw Feel callback → manager update → memory entry stored → derived enemy/danger selection →
 planner evaluator reads `selected()`/`visible_now()`.**
 
+## Repo-added per-NPC perception levers (verified)
+
+This repo grafts **per-object multipliers/overrides onto the vanilla formulas**, all exposed on
+`game_object` and all documented from the Lua side in `gamedata/scripts/lua_help_ex.script` (that file
+is the authoritative catalog; the mechanism notes here are what the KB adds). None of them are
+serialized — they live on the manager instance, so they survive while the NPC is online and must be
+re-applied on spawn (the memory manager / condition is rebuilt when it comes back online).
+
+Vision, on `CVisualMemoryManager` (both fields are deliberately *not* cleared by
+`reinit`/`reload` — see the comment on `m_vision_speed`):
+
+- `npc:set_vision_speed(k)` → `m_vision_speed`, a factor on `get_visible_value` applied *after* the
+  global `ai_vision_speed_boost` cvar and after the optional Lua `visual_memory_manager.get_visible_value`
+  override. It scales how fast the accumulate-to-threshold counter fills, i.e. time-to-spot.
+- `npc:set_view_distance_factor(k)` → `m_view_distance_factor`, a factor on
+  `object_visible_distance`'s result, so it composes with the per-mental-state `max_view_distance`
+  LTX multiplier. This is the *range* sibling of vision speed; negatives clamp to 0 in both setters.
+
+Enemy selection, on `CEnemyManager::evaluate` (lower score wins; vanilla subtracts fixed penalties):
+
+- `npc:set_visible_enemy_bias(actor_bias, npc_bias)` replaces the hardcoded `900` subtracted when the
+  **actor** currently sees this NPC and the `300` for another NPC that does. Each argument is
+  independent; a negative one keeps that side vanilla, `0` removes the pull entirely.
+- `npc:set_hit_redirect(max, falloff)` replaces the vanilla flat CQB nudge toward
+  `hit().last_hit_object_id()` with a distance-decaying bonus: within `falloff` metres it subtracts
+  `max * (1 - d²/falloff²)`, so a close attacker is prioritised and a distant one fades to nothing.
+  `max < 0` keeps vanilla (the −5 CQB step under 30 m plus the standard aggro advantage beyond).
+- `npc:make_enemy_visible(enemy)` calls the engine's own
+  `CMemoryManager::make_object_visible_somewhen` (the same call squad wounded-target distribution
+  uses) to plant the target in the **seen** class. This matters because `evaluate` scores "currently
+  seen" far above hit/sound memory, so an attacker injected only into hit memory can never win
+  selection. Visibility then decays by the normal memory rules. Stalker receiver, alive-entity
+  argument, error log otherwise.
+
+Actor-side: the **"how visible am I" value** the HUD noise/luminosity dial shows moved out of the HUD
+widget into `CActor` (`m_npc_visibility` / `GetVisibility` / `SetVisibilityValue` /
+`SetVisibilityFromObject`, with free functions `SetActorVisibility(who_id, value)` /
+`GetActorVisibility()` as the seam; `CVisualMemoryManager` reports per-observer values into it). It is
+the max over observers, smoothed toward the target per frame. Scripts read it as
+`get_actor_visibility()`; `get_actor_ui_luminosity()` remains as a deprecated alias. Previously the
+state lived in `CUIMotionIcon`, so it only existed while that HUD element did.
+
 ## Isolation ledger (the seams)
 
 - **Scheduling:** `memory().update(dt)` runs every `CCustomMonster::shedule_Update` tick (deferred
@@ -94,6 +136,18 @@ Main thread (deferred scheduler channel, serial).
   a heard threat matters only once it becomes a danger object.
 - **Memory lingers:** an unseen enemy stays remembered (decaying) until offline — `visible_now` ≠ "in
   FOV this instant" (use `visible_right_now` for the strict check).
+- **`CEnemyManager`'s hit-redirect fields are not initialized by the constructor.**
+  `m_hit_redirect_max` / `m_hit_redirect_falloff` are assigned only inside `set_visible_enemy_bias` and
+  `set_hit_redirect`, and neither the ctor nor the header default-initializes them, so `evaluate()`
+  reads an indeterminate value on any NPC where no script ever called either setter (the read happens
+  whenever the candidate is the last-hit object). Related order dependence:
+  `set_visible_enemy_bias` **resets** hit-redirect to its defaults, so calling it after
+  `set_hit_redirect` silently discards the redirect tuning.
+- **Per-NPC levers are not saved.** They must be re-applied on every spawn/online transition; nothing
+  warns when they are lost.
+- **`remove_links` no longer assumes its list exists.** All three sense managers (`visual`, `sound`,
+  `hit`) replaced `VERIFY(m_<list>)` with a null check — a `CMemoryManager::remove_links` crash in the
+  MT build, i.e. relcase can reach a manager whose list is already gone.
 
 ## Deeper
 

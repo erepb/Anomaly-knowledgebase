@@ -1,9 +1,9 @@
 ---
 domain: flows/animation-callbacks
 tags: [xrgame, animation, skeleton, motion-mark, footstep, callback, threading, flow]
-sources: [src/Layers/xrRender/SkeletonAnimated.cpp, src/xrEngine/SkeletonMotions.cpp, src/xrEngine/SkeletonMotions.h, src/xrGame/HudItem.cpp, src/xrGame/step_manager.cpp]
-related: [flows/weapon-state-machine.md, flows/engine-boot-frame.md, flows/lua-callback-lifecycle.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [src/Layers/xrRender/SkeletonAnimated.cpp, src/xrEngine/SkeletonMotions.cpp, src/xrEngine/SkeletonMotions.h, src/xrGame/HudItem.cpp, src/xrGame/player_hud.cpp, src/xrGame/player_hud.h, src/xrGame/step_manager.cpp]
+related: [flows/weapon-state-machine.md, flows/engine-boot-frame.md, flows/lua-callback-lifecycle.md, flows/options-runtime.md, engine/xrGame.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -45,6 +45,15 @@ animation is running (`m_bStopAtEndAnimIsRunning` + `m_current_motion_def`):
 
 **`motion_marks::pick_mark(t)`** (`SkeletonMotions.cpp`) — returns the interval `[first,second]`
 containing `t` (intervals are ordered; breaks early once `first > t`), else `NULL`.
+
+**Mark timing vs animation speed** (repo addition, cvar `scale_hud_motion_marks_by_speed`, default
+**off**). Mark times are authored in the animation's own time base, but the wall-clock elapsed time
+above ignores playback speed, so a sped-up or slowed animation crosses its marks at the wrong moment.
+With the cvar on, both `motion_prev_time` and `motion_curr_time` are multiplied by the motion's
+quantized `CMotionDef` speed **and** by `attachable_hud_item::final_anim_speed` — the actual speed
+`anim_play` ended up using after the LTX `anim_speed` and any script override from
+`actor_on_hud_animation_play`. Off by default because reload/fire logic hangs off these marks and every
+existing config is tuned against the unscaled behaviour.
 
 **`CHudItem::OnMotionMark`** — fires the Lua functor `_G.CHudItem__OnMotionMark(state, mark_name,
 obj, parent)`. (Weapon subclasses override to drive e.g. `ReloadMagazine` on the reload mark.)

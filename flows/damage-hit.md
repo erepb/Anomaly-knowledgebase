@@ -1,9 +1,9 @@
 ---
 domain: flows/damage-hit
 tags: [engine, cpp, damage, hit, condition, death, flow, callbacks, alife]
-sources: [src/xrGame/Hit.h, src/xrGame/Hit.cpp, src/xrGame/Entity.cpp, src/xrGame/entity_alive.cpp, src/xrGame/entity_alive.h, src/xrGame/EntityCondition.cpp, src/xrGame/EntityCondition.h, src/xrGame/damage_manager.cpp, src/xrGame/Wound.h, src/xrGame/GameObject.cpp]
-related: [flows/weapon-fire-callbacks.md, flows/actor.md, flows/object-lifecycle.md, flows/creatures-actor-configs.md, engine/xrGame.md, engine/server-entities.md, GLOSSARY.md]
-updated: 2026-06-05
+sources: [src/xrGame/Hit.h, src/xrGame/Hit.cpp, src/xrGame/Entity.cpp, src/xrGame/entity_alive.cpp, src/xrGame/entity_alive.h, src/xrGame/EntityCondition.cpp, src/xrGame/EntityCondition.h, src/xrGame/damage_manager.cpp, src/xrGame/Wound.h, src/xrGame/GameObject.cpp, src/xrGame/Level_Bullet_Manager.cpp, src/xrGame/Level_Bullet_Manager.h, src/xrGame/character_hit_animations.cpp, src/xrGame/character_hit_animations.h, src/xrEngine/xr_object.cpp, src/xrEngine/xr_object.h]
+related: [flows/weapon-fire-callbacks.md, flows/actor.md, flows/object-lifecycle.md, flows/creatures-actor-configs.md, flows/ai-perception.md, flows/stalker-execution.md, engine/xrGame.md, engine/server-entities.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -75,6 +75,28 @@ condition update — the actor's is in `flows/actor.md`): bleeding from wounds, 
 regen, and the kill-threshold / last-chance-invulnerability logic; it can fire the virtual
 `OnCriticalHitHealthLoss`/`OnCriticalWoundHealthLoss`/`OnCriticalRadiationHealthLoss` hooks.
 *(agent-traced.)*
+
+## Repo additions on the hit path (verified)
+
+- **Visual-mesh hit validation** (`bullet_check_visual`, build-gated on `CBULLETMANAGER_EX`). A bone
+  hitbox is a coarse capsule, so a bullet can "hit" a thin model through empty space. When an object's
+  section sets `bullet_check_visual = true` (`CObject::Load`, defaults false, also settable at runtime
+  via `obj:SetBulletCheckVisual`), `CBulletManager::firetrace_callback` additionally requires the ray
+  to hit a **triangle of that bone's visual mesh** (`ValidateHitDynamicVisualMesh` → `PickBone`); on
+  failure it returns `TRUE`, i.e. ignores the hit and lets the bullet keep flying, and on success it
+  moves `collide_position` to the real mesh intersection. `bullet_test_callback_data` carries the
+  trajectory's `max_distance` so the pick has a range.
+- **Hit-flinch reader** `npc:is_hit_anim_playing()`. `character_hit_animation_controller::PlayHitMotion`
+  now stamps an end time (`stamp_hit_anim_end`, the longest remaining blend converted to
+  `Device.dwTimeGlobal` ms, taken on both the effected and non-effected paths) and
+  `is_hit_anim_playing` is a single clock compare against it — no blend walk. Reachable for any alive
+  entity with character physics support; false otherwise.
+- **Passive regen boost** `npc:set_health_restore_boost(v)` stores `m_health_restore_boost`, added to
+  `change_v().m_fV_HealthRestore` in `CEntityCondition::UpdateHealth`, i.e. HP trickles back with no
+  item. Any `CEntityAlive`; negatives clamp to 0; not serialized, so re-apply on spawn (the
+  condition is rebuilt when the entity comes back online).
+- **Enemy-selection hit levers** (`set_hit_redirect`, and its interaction with `set_visible_enemy_bias`)
+  read `hit().last_hit_object_id()` — documented with the hazard in `flows/ai-perception.md`.
 
 ## Death (verified callback)
 

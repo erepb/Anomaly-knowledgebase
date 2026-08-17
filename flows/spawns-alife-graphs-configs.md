@@ -1,9 +1,9 @@
 ---
 domain: flows/spawns-alife-graphs-configs
 tags: [modlayer, gameplay, unpacked, config, ltx, data, spawns, alife, graph, story-id, flow]
-sources: [unpacked/spawns/all.spawn, unpacked/configs/alife.ltx, unpacked/configs/game_graphs.ltx, unpacked/configs/game_story_ids.ltx, unpacked/configs/game_spawn_story_ids.ltx, unpacked/configs/game_maps_single.ltx, unpacked/configs/patrol_paths.ltx, unpacked/configs/dynamic_spawn.ltx]
+sources: [unpacked/spawns/all.spawn, unpacked/configs/alife.ltx, unpacked/configs/game_graphs.ltx, unpacked/configs/game_story_ids.ltx, unpacked/configs/game_spawn_story_ids.ltx, unpacked/configs/game_maps_single.ltx, unpacked/configs/patrol_paths.ltx, unpacked/configs/dynamic_spawn.ltx, gamedata/configs/patrol_paths.ltx, src/xrGame/patrol_point.cpp]
 related: [flows/alife-online-offline.md, flows/alife-services.md, flows/sim-board.md, flows/scripted-squad.md, flows/smart-terrain-core.md, flows/pda-map-news.md, flows/gameplay-boot.md, flows/per-smart-logic-configs.md, flows/creatures-actor-configs.md, modlayer/gameplay/configs-data.md, modlayer/config-ltx.md, GLOSSARY.md]
-updated: 2026-06-21
+updated: 2026-08-17
 verified: code
 ---
 
@@ -70,10 +70,17 @@ registry the loader + level transitions use. `[def_map]`/`[global_map]` give the
 
 ## Vestigial stubs (verified)
 
-- **`patrol_paths.ltx` is effectively empty** (1 line). Patrol paths in Anomaly are stored as `way_` spawn
+- **`patrol_paths.ltx` is effectively empty** (1 line; the repo ships an empty
+  `gamedata/configs/patrol_paths.ltx` too). Patrol paths in Anomaly are stored as `way_` spawn
   elements **inside `all.spawn`**, not here — so the `path_walk`/`path_look` names the walker/camper schemes
   reference (F74) resolve against the binary spawn, not this LTX. The file is a vestigial stub. (A few
   per-smart `*_patrol.ltx` under `scripts/` are custom_data, F121, not patrol geometry.)
+  **But the engine path for LTX-defined patrols is real and now works:** `CPatrolPoint::load_from_config`
+  reads `<point>:name` / `:position` / `:level_vertex_id` / `:game_vertex_id` (each `R_ASSERT4`'d present)
+  plus optional `:flags` from a patrol section. It was broken until 2026-07 — every key was built with
+  `FormatString(...).c_str()` on a **temporary** `xr_string`, so the `LPCSTR` dangled and lookups read
+  freed memory; the fix keeps each key in a named `xr_string`. If you find old notes saying LTX patrol
+  paths "don't work", that was this bug.
 - **`dynamic_spawn.ltx` is near-empty** — the live dynamic-item-spawn config is `items/settings/
   dynamic_item_spawn.ltx` (F120/F106); this is a stub.
 

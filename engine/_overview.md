@@ -1,9 +1,9 @@
 ---
 domain: engine
 tags: [engine, cpp, build, mt]
-sources: [src/engine-vs2022.sln, src/xrEngine/EngineAPI.cpp, src/xrGame/xrGame.vcxproj, CMakeLists.txt]
+sources: [src/engine-vs2022.sln, src/xrEngine/EngineAPI.cpp, src/xrEngine/xrEngine.vcxproj, src/xrGame/xrGame.vcxproj, src/xrGame/vs2022/xrGame.vcxproj, CMakeLists.txt, README.md]
 related: [INDEX.md, GLOSSARY.md, engine/xrGame.md, engine/xrCore.md, engine/renderer.md, engine/server-entities.md]
-updated: 2026-06-05
+updated: 2026-08-17
 verified: code
 ---
 
@@ -59,13 +59,21 @@ enumerated from their own vcxproj files.)*
   local environment has no cmake/MSVC on PATH — builds happen in the IDE.
 - **Hot reload**: *(per README "Working with Hot Reload" — not verified in code)* VS2022 flow for
   fast engine iteration. See `GLOSSARY.md#hot-reload`.
+- **Incremental LTCG**: every Release/Release-AVX link config of `xrEngine.vcxproj` passes
+  `/LTCG:INCREMENTAL` (alongside `/ignore:4099`). On a WPO build the link step dominates iteration time;
+  this makes it reuse prior whole-program analysis. Only `xrEngine` carries it — if a rebuild suddenly
+  gets slow again, check whether that option survived a project-file merge.
+- **Adding a source file** means editing both `src/xrGame/xrGame.vcxproj` *and*
+  `src/xrGame/vs2022/xrGame.vcxproj` (plus the matching `.filters`): the tree keeps two project files
+  per module and a file added to only one builds in only one solution.
 
 ## Branch / variant scheme
 
 Branch names encode the build variant (verified via `git branch`): `-wpo`, `-mt`, `-vulkan`; current
-checkout/main is `all-in-one-vs2022-wpo`. *(Meaning of each variant and the MT threading feature list
-— loading, grass/rain/particles, bone calc, AI feel/vision, scheduler, UI, logger — are from the
-README, not verified in code.)* See `GLOSSARY.md`.
+working checkout is `all-in-one-vs2022-wpo-mt` (the `-mt` line, which periodically merges
+`all-in-one-vs2022-wpo`; the README changelog labels entries "Main and MT" vs "MT"). *(Meaning of each
+variant and the MT threading feature list — loading, grass/rain/particles, bone calc, AI feel/vision,
+scheduler, UI, logger — are from the README, not verified in code.)* See `GLOSSARY.md`.
 
 ## Where to start for common changes
 

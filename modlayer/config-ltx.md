@@ -1,9 +1,9 @@
 ---
 domain: modlayer/config
 tags: [modlayer, config, dltx, ltx]
-sources: [gamedata/configs/, gamedata/scripts/ltx_help_ex.script, src/xrCore/Xr_ini.cpp]
-related: [modlayer/_overview.md, engine/xrCore.md, flows/dltx-config-load.md, GLOSSARY.md]
-updated: 2026-06-04
+sources: [gamedata/configs/, gamedata/configs/mod_system_anomaly_fixes.ltx, gamedata/scripts/ltx_help_ex.script, src/xrCore/Xr_ini.cpp]
+related: [modlayer/_overview.md, engine/xrCore.md, flows/dltx-config-load.md, flows/vehicles-holder.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -30,16 +30,29 @@ if missing; listed keys replace the base's, unmentioned base keys are kept, new 
 operators: `>key = a,b` append to a list, `<key = a` remove from a list, `key = DLTX_DELETE` delete.
 A duplicate plain `[section]` (no `!`/`@`) is a fatal.
 
-This repo's own `mod_*.ltx` (root of `configs/`, verified by listing): `mod_system_base_hud.ltx`,
+This repo's own `mod_*.ltx` (root of `configs/`, re-listed 2026-08-17): `mod_system_base_hud.ltx`,
 `mod_system_knife.ltx`, `mod_system_flashlight_definition.ltx`, `mod_system_shader_crosshair.ltx`,
-`mod_system_signal_light.ltx`, `mod_system_spawn_antifreeze_ignore.ltx`, `mod_script_dxml.ltx`.
+`mod_system_spawn_antifreeze_ignore.ltx`, `mod_system_anomaly_fixes.ltx`, `mod_script_dxml.ltx`
+(plus the non-DLTX `patrol_paths.ltx`). `mod_system_signal_light.ltx` was **deleted** upstream (signal
+light / lamp LTX fix) — don't look for it.
+
+`mod_system_anomaly_fixes.ltx` is a deliberate collection point: base-Anomaly config *bugs* fixed from
+the engine repo rather than in the mod's own feature files. Its first (and so far only) fragment is
+`![ammo_base]` pinning the five ballistic factors explicitly — `k_dist`/`k_disp`/`k_hit`/`k_impulse` at
+1.0 and `k_ap` at 0.0. Base `ammo_base` (`configs/items/weapons/weapon_ammo.ltx`) declares the first
+four but **not `k_ap`**, so every ammo section inheriting it relied on the engine's default; writing all
+five out keeps the inherited baseline explicit. Add further base-game config fixes here, one `!`/`@`
+fragment per section.
 
 ## Extra params added by modded exes
 
 `gamedata/scripts/ltx_help_ex.script` is a **comment-only documentation file** cataloguing LTX params
-the modded exes added that base Anomaly doesn't read. Its categories (verified by reading the file):
-Objects, Outfits/Actor, Weapons, Grenades, Explosives, PDAs, Ammo, Detectors, Flashlight definitions,
-Anomalies, Particles (`.pe`), `WeaponStatMgun`, Projector.
+the modded exes added that base Anomaly doesn't read. Its categories (re-read 2026-08-17): Objects,
+Outfits/Actor, Weapons, Grenades, Explosives, PDAs, Ammo, Detectors, Flashlight definitions, Anomalies,
+Particles (`.pe`), `WeaponStatMgun`, Projector, and **Car** (the `CAR_NEW` drone / visual-camera /
+camera-scope blocks, part in the car's own section and part in the visual's `userdata` — see
+`flows/vehicles-holder.md`). Recent additions to watch: `bullet_check_visual` under Objects
+(`flows/damage-hit.md`).
 
 The catalog reflects real engine reads — spot-verified (10/≈80 params traced to their C++ consumer):
 

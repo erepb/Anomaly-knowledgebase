@@ -3,7 +3,7 @@ domain: meta
 tags: [meta, methodology, flows, lifecycle]
 sources: [src/, gamedata/, unpacked/]
 related: [INDEX.md, CONVENTIONS.md, flows/lua-callback-lifecycle.md]
-updated: 2026-06-05
+updated: 2026-08-17
 ---
 
 # Methodology — how this codebase is analyzed & divided
@@ -116,17 +116,20 @@ distinct from *(INFERRED)* (which means no one read the code). See `flows/object
 > resume-after-compaction protocol — lives in **`ROADMAP.md`**. This list is the short status mirror;
 > keep both in sync.
 
-High value = repo-specific, crash-prone, or frequently touched. Status as of `updated`.
+High value = repo-specific, crash-prone, or frequently touched. Status as of `updated` — statuses
+re-checked against the tree on 2026-08-17 (all ten are now documented; `ROADMAP.md` remains the detailed
+plan, and `INDEX.md`'s "Branch sync" section records what was reconciled after a code sync).
 
 1. **Lua boot + callback lifecycle** — ✅ done → `flows/lua-callback-lifecycle.md` (flagship/template).
 2. **Config load: LTX parse + DLTX merge** — ✅ done → `flows/dltx-config-load.md`.
 3. **DXML XML interception** — ✅ done → `flows/dxml-xml-interception.md`.
-4. **Engine boot → device init → main/frame loop** — `src/xrEngine/` (device, scheduler).
-5. **Render frame (R4/DX11)**: cull → g-buffer → lighting → post → present — `src/Layers/`.
-6. **Save / load lifecycle** — ALife storage + net packets.
-7. **ALife online↔offline transition** — `src/xrServerEntities/` (crash-prone; see git history).
+4. **Engine boot → device init → main/frame loop** — ✅ done → `flows/engine-boot-frame.md`.
+5. **Render frame (R4/DX11)**: cull → g-buffer → lighting → post → present — ✅ done →
+   `flows/render-frame.md` (+ the `flows/renderer-*.md` family).
+6. **Save / load lifecycle** — ✅ done → `flows/save-load.md`.
+7. **ALife online↔offline transition** — ✅ done → `flows/alife-online-offline.md`.
 8. **Weapon fire → hit → callback chain** — ✅ done → `flows/weapon-fire-callbacks.md`.
-9. **Options framework lifecycle** — `options_builder` → UI → console var/config.
+9. **Options framework lifecycle** — ✅ done → `flows/options-runtime.md`.
 10. **Object lifecycle (spawn/update/destroy) + scheduler split** — ✅ done →
     `flows/object-lifecycle.md` (the xrGame backbone; per-domain flows attach to its spine).
 

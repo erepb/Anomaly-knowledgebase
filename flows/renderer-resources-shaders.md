@@ -1,9 +1,9 @@
 ---
 domain: flows/renderer-resources-shaders
-tags: [engine, renderer, shaders, r4, dx11, blender, flow]
-sources: [src/Layers/xrRender/ResourceManager.cpp, src/Layers/xrRender/ResourceManager.h, src/Layers/xrRender/ResourceManager_Loader.cpp, src/Layers/xrRender/ResourceManager_Resources.cpp, src/Layers/xrRender/ResourceManager_Reset.cpp, src/Layers/xrRender/ResourceManager_Scripting.cpp, src/Layers/xrRender/Shader.cpp, src/Layers/xrRender/Shader.h, src/Layers/xrRender/ShaderResourceTraits.h, src/Layers/xrRenderDX10/dx10ResourceManager_Resources.cpp]
-related: [engine/renderer.md, flows/render-frame.md, flows/renderer-blender-compile.md, flows/renderer-backend.md, flows/renderer-scene-graph.md, modlayer/assets.md, GLOSSARY.md]
-updated: 2026-06-06
+tags: [engine, renderer, shaders, r4, dx11, blender, mt, flow]
+sources: [src/Layers/xrRender/ResourceManager.cpp, src/Layers/xrRender/ResourceManager.h, src/Layers/xrRender/ResourceManager_Loader.cpp, src/Layers/xrRender/ResourceManager_Resources.cpp, src/Layers/xrRender/ResourceManager_Reset.cpp, src/Layers/xrRender/ResourceManager_Scripting.cpp, src/Layers/xrRender/Shader.cpp, src/Layers/xrRender/Shader.h, src/Layers/xrRender/ShaderResourceTraits.h, src/Layers/xrRender/SH_Texture.h, src/Layers/xrRender/xrRender_console.cpp, src/Layers/xrRenderDX10/dx10ResourceManager_Resources.cpp, src/Layers/xrRenderDX10/dx10SH_Texture.cpp, src/Layers/xrRenderPC_R4/r4_R_render.cpp]
+related: [engine/renderer.md, flows/render-frame.md, flows/renderer-blender-compile.md, flows/renderer-backend.md, flows/renderer-scene-graph.md, flows/options-runtime.md, modlayer/assets.md, GLOSSARY.md]
+updated: 2026-08-17
 verified: code
 ---
 
@@ -88,6 +88,37 @@ composite (passes, constant/texture lists, constant tables) → `ShaderElement` 
 - **`ResourceManager_Reset.cpp:reset_begin/reset_end`** — *Does:* release/recreate device-bound
   resources (states, render targets, dynamic streams) around a device reset/resize.
 
+## Texture unload & mid-session eviction (repo addition, DX11/MT)
+
+Two ways a loaded texture surface goes away again, both operating on the same `m_textures` map under
+`creationGuard`:
+
+- **On level unload** — `CResourceManager::UnloadAllTexturesOnLevelUnload`, gated by the
+  `r__clear_resources_on_unload` flag (`psDeviceFlags2 / rsClearAllResources`). It now skips three
+  classes instead of one: `flags.bUser` (script/procedural surfaces), any name containing `$` (bound to
+  render targets and other engine internals — the original guard), and anything under `ui\` / `ui/`.
+  Unloading UI or `$user$` textures was a crash/black-icon source.
+- **Continuously, while playing** — `CResourceManager::EvictStalledTextures`, called from
+  `CRender::Render` (R4) every `r__tex_evict_interval` frames. `CTexture::Apply` stamps
+  `dwLastUsedFrame`, and the pass walks a **bounded batch** of the map (`r__tex_evict_batch_size`,
+  resuming from a static string cursor via `lower_bound`, wrapping at the end) unloading textures that
+  are loaded, not `bUser`/`$user$`/`$null`, not `ui\`, hold only one reference, and have not been
+  applied for `r__tex_evict_age_frames` frames. Everything is `#if defined(USE_DX11)` and every
+  statistic/log line is `#ifdef DEBUG`, so release builds only pay the walk.
+  Cvars (`xrRender_console.cpp`, exposed as options rows in
+  `gamedata/scripts/options_modded_exes_optimizations.script`): `r__tex_evict_enabled` (default **0**),
+  `r__tex_evict_age_frames` (1800, range 300–36000), `r__tex_evict_batch_size` (200, 10–1000),
+  `r__tex_evict_interval` (600, 60–3600).
+
+**Re-loading an evicted texture is what makes this safe.** `CTexture::apply_load` used to call
+`Load()` inline; with eviction that can happen on the render thread mid-gameplay, racing the resource
+thread inside `D3DX11CreateTextureFromMemory`. It now queues the reload on the same
+`textures_load_tasks` PPL group `_CreateTexture` uses for new textures, guarded by `flags.bLoading`
+against re-queuing, and binds `apply_normal` for the current call — so the frame draws whatever is
+already there (possibly nothing) and later calls land on the real handler once `PostLoad` re-points
+`bind`. `CTexture::surface_set` also marks `$user$` names as `bUser` so procedural surfaces are never
+eligible.
+
 ## Isolation ledger (the seams)
 
 - **Owned state:** `m_blenders`, `m_textures`, `m_vs`, `m_ps` (+ GS/HS/DS/CS maps); vectors
@@ -120,6 +151,16 @@ loading, model load), not per-frame. Texture pixel data loads asynchronously.
 - **Dedup is by value** — two materials with identical passes/textures share one `Shader*`; editing a
   texture name changes the dedup key and forks a new shader.
 - **Dedicated server** has no resources — guard every renderer-resource assumption against it.
+- **Eviction is opt-in and DX11-only.** `r__tex_evict_enabled` defaults to 0 and the whole body is
+  compiled out unless `USE_DX11`; a texture-memory question on R1/R2/R3 is not about this system.
+- **An evicted texture is invisible for at least a frame.** The reload is asynchronous by design, so
+  the first draw after eviction binds whatever surface is currently there. Aggressive settings (short
+  age, large batch) trade VRAM for pop-in.
+- **The eviction cursor is a function-local static**, i.e. one shared position for the whole process;
+  it is a fairness device, not a per-level bookmark.
+- **Reference count > 1 blocks eviction.** A texture held by a live shader element never leaves; the
+  DEBUG build logs `[TexEvict] stuck` for counts above 2, which is the diagnostic for "eviction does
+  nothing".
 
 ## Deeper
 
@@ -131,6 +172,11 @@ loading, model load), not per-frame. Texture pixel data loads asynchronously.
 - Blender library load: `xrRender/ResourceManager_Loader.cpp` (`OnDeviceCreate`); Lua bind:
   `ResourceManager_Scripting.cpp`
 - Device reset: `xrRender/ResourceManager_Reset.cpp`
+- Unload/eviction: `xrRender/ResourceManager.cpp` (`UnloadAllTexturesOnLevelUnload`,
+  `EvictStalledTextures`), `xrRender/SH_Texture.h` (`dwLastUsedFrame`, `flags.bUser`),
+  `xrRenderDX10/dx10SH_Texture.cpp` (`apply_load` PPL requeue, `Apply` stamp, `surface_set`),
+  `xrRenderPC_R4/r4_R_render.cpp` (the interval call site), `xrRender/xrRender_console.cpp`
+  (`ps_r__tex_evict_*`)
 - Renderer mechanism (blender/shader-path): `engine/renderer.md`; on-disk shaders: `modlayer/assets.md`
 
 ## Maintenance
