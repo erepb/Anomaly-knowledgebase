@@ -3,7 +3,7 @@ domain: flows/alife-online-offline
 tags: [server, alife, online, offline, switch, crash, hysteresis, flow]
 sources: [src/xrGame/alife_switch_manager.cpp, src/xrGame/alife_dynamic_object.cpp, src/xrGame/alife_update_manager.cpp, src/xrGame/alife_switch_manager_inline.h, src/xrServerEntities/xrServer_Objects_ALife.cpp]
 related: [flows/object-lifecycle.md, flows/save-load.md, flows/ai-squad-logic.md, flows/spawns-alife-graphs-configs.md, engine/server-entities.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-11-13
 verified: code
 ---
 
@@ -128,6 +128,23 @@ destroy go through the single server entity map.
 - **Dead creatures pinned online:** `can_switch_offline` health guard keeps corpses online by design.
 - **Spawn after destroy ordering:** `add_online` destroys the server copy *before* `Process_spawn`; a
   spawn failure there leaves the object without a server entity (limbo) — order is load-bearing.
+
+### Squad / spawn fixes merged 2026.11.09
+
+- **Online squad members' level/game vertex** — members are not in the level registry, so the switch
+  manager never synced them; `CSE_ALifeOnlineOfflineGroup` now calls `synchronize_location` on the
+  online commander and every online member (`alife_online_offline_group.cpp`). Stale vertices used to
+  misplace squads on level change.
+- **Squad teleport (ixray port)** — online members teleport between levels together with their squad;
+  `teleport_object` skips separate graph registration of members, and offline members are not
+  registered separately (`alife_update_manager.cpp`, `alife_monster_abstract.cpp`).
+- **Deferred spawn children stay behind their parent** — with spawn antifreeze, a child whose parent
+  is still postponed is re-queued, and a child whose parent has left/been destroyed is dropped
+  (`Level.cpp`); previously NPC items (bolts) fell to the ground at the parent's feet. Trader/stash
+  binders ignore drop events for items antifreeze hasn't spawned yet.
+- **Save during NPC spawn** — `CCustomMonster::net_Relevant` returns false until `NET` is filled at
+  the end of `net_Spawn`, avoiding a `net_Export` assert (`CustomMonster.cpp`).
+- `CALifeGraphRegistry` lost its write-only 24 KB terrain table (no functional change).
 
 ## Deeper
 

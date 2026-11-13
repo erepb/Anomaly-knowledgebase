@@ -1,9 +1,9 @@
 ---
 domain: flows/lua-callback-lifecycle
 tags: [modlayer, lua, callbacks, luabind, flow, lifecycle]
-sources: [src/xrServerEntities/script_engine.cpp, src/xrServerEntities/script_storage.cpp, unpacked/scripts/_g.script, gamedata/scripts/axr_main.script, gamedata/scripts/dxml_core.script, gamedata/scripts/dynamic_callbacks.lua]
+sources: [src/xrServerEntities/script_engine.cpp, src/xrServerEntities/script_storage.cpp, unpacked/scripts/_g.script, gamedata/scripts/axr_main.script, gamedata/scripts/dxml_core.script, gamedata/scripts/dynamic_callbacks.lua, gamedata/scripts/_g_patches.script, docs/axr_main.md]
 related: [modlayer/scripting.md, modlayer/dxml.md, engine/server-entities.md, METHODOLOGY.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-11-13
 ---
 
 # Flow: Lua boot & callback lifecycle
@@ -36,9 +36,9 @@ Engine process start → renderer/game DLLs loaded → `CScriptEngine` builds th
 4. **Load common scripts** — `CScriptEngine::load_common_scripts()` (`script_engine.cpp`) reads
    `$game_config$/script.ltx` `[common] script = a, b, c…`, `process_file`s each module, and calls
    each module's `<name>_initialize()` if present. (Init phase — distinct from `on_game_start`.)
-5. **DXML wraps the API** — `dxml_core.script` (loaded as a module) **monkey-patches**
-   `_G.RegisterScriptCallback`/`UnregisterScriptCallback` to special-case `"on_xml_read"` into its own
-   ordered list, passing all other names through to the `_g.script` originals (`RSC`/`URSC`).
+5. **DXML declares `on_xml_read`** — `dxml_core.script` (loaded as a module) calls
+   `AddScriptCallback("on_xml_read")`. Until 2026.10.11 it monkey-patched `RegisterScriptCallback` into a
+   private list; that wrapper is gone and `on_xml_read` is an ordinary bus callback.
 
 ### Phase B — Game-start fan-out (Lua)
 
@@ -55,12 +55,13 @@ Engine process start → renderer/game DLLs loaded → `CScriptEngine` builds th
 
 9. Engine code or scripts fire an event with **`SendScriptCallback(name,...)`**
    (`_g.script`) → **`axr_main.make_callback(name,...)`** (`axr_main.script`) which calls
-   every registered handler **in ascending registration index** (`spairs` + `sort_func_values_ascend`
-   → deterministic FIFO), then runs `axr_main[name](...)` if `axr_main` itself defines a same-named
+   every registered handler **in ascending stored priority** (`spairs` + `sort_func_values_ascend`).
+   With no ordering arguments that is registration order (FIFO); `before_funcs`/`after_funcs` and the
+   Pre/Normal/Post tier change it (see `callback_set` below). Then it runs `axr_main[name](...)` if `axr_main` itself defines a same-named
    function (built-in handler shortcut).
-10. **DXML branch**: engine XML load does **not** go through `intercepts`; it calls
-    `dxml_core.xmlDispatch(xml_file_name, xml_obj, flags)` over `dxml_core`'s `xmlCallbacks` list.
-    See `flows` backlog item #3 and `modlayer/dxml.md`.
+10. **DXML branch**: engine XML load reaches `dxml_core._G.COnXmlRead`, which fires
+    `SendScriptCallback("on_xml_read", xml_file_name, xml_obj, flags)` through `intercepts` like any
+    other event (`flows/dxml-xml-interception.md`, `modlayer/dxml.md`).
 
 ### Phase D — Teardown
 
@@ -86,9 +87,16 @@ Engine process start → renderer/game DLLs loaded → `CScriptEngine` builds th
   `next_index[name]=1`. *Writes:* `intercepts`, `next_index`. *Gotcha:* warns+callstack if the name
   already exists; a name must be added (here or in the static `intercepts` table) before handlers can
   attach.
-- **`axr_main.script:callback_set(name, f)`** — *Does:* `intercepts[name][f] = next_index[name]++`.
-  *Writes:* `intercepts`, `next_index`. *Gotcha:* warns if `name` missing or `f` nil; the stored
-  index is what makes dispatch order deterministic.
+- **`axr_main.script:callback_set(name, f, before_funcs, after_funcs, priority)`** — *Does:* registers
+  `f` with ordering constraints, then `callback_reorder(name)` recomputes the numeric value stored in
+  `intercepts[name][f]` (a stable topological sort per tier; tiers `CALLBACKS_PRE` → `CALLBACKS_NORMAL`
+  (default) → `CALLBACKS_POST`). `before_funcs` = handlers `f` must run before, `after_funcs` = handlers
+  it must run after; constraints may name handlers not yet registered. Reordering is transactional: a
+  cycle or a cross-tier contradiction rolls the registration back with a `!` log line; a malformed
+  constraint list or invalid tier is an `assert`. Shorthands
+  `RegisterScriptCallbackPre` / `RegisterScriptCallbackPost` (`_g_patches.script`). User guide:
+  `docs/axr_main.md`. *Gotcha:* the stored value is a computed priority, not a registration counter —
+  `make_callback` still just sorts by it.
 - **`axr_main.script:callback_unset(name, f)`** — *Does:* `intercepts[name][f] = nil`.
 - **`axr_main.script:make_callback(name,...)`** — *Does:* iterate `intercepts[name]` via
   `spairs(..., sort_func_values_ascend)` and call each handler (`f(...)` for functions; `obj[name](obj,...)`
@@ -96,9 +104,6 @@ Engine process start → renderer/game DLLs loaded → `CScriptEngine` builds th
 - **`axr_main.script:on_game_start()`** — *Does:* scan `$game_scripts$` root `*.script`,
   call each module's `on_game_start()` (skip ignore list + empty files). *Gotcha:* only **root**
   scripts, not subfolders; order is FS enumeration.
-- **`dxml_core.script:RegisterScriptCallback` override** — *Does:* if `name=="on_xml_read"`,
-  append handler to local `xmlCallbacks` (dedup); else delegate to saved original `RSC`. *Writes:*
-  `xmlCallbacks`. *Pairs with:* `xmlDispatch`.
 - **`dynamic_callbacks.lua:RegisterScriptCallback/SendScriptCallback`** — *Does:* a
   separate narrow bus over a fixed `intercepts = {save, load, update, save_state, load_state}`.
   *Gotcha:* **debug-only and always superseded** — see Subtleties.
@@ -107,9 +112,9 @@ Engine process start → renderer/game DLLs loaded → `CScriptEngine` builds th
 
 - `axr_main.intercepts` (name → {handler → index}) and `axr_main.next_index` (name → counter) — the
   main bus registry.
-- `dxml_core`'s local `xmlCallbacks` — the XML-read bus (separate).
 - Globals on `_G`: `RegisterScriptCallback`, `SendScriptCallback`, `AddScriptCallback`,
-  `UnregisterScriptCallback` (defined by `_g.script`, wrapped by `dxml_core`).
+  `UnregisterScriptCallback` (defined by `_g.script`; `_g_patches.script` adds the ordering arguments
+  and `RegisterScriptCallbackPre`/`Post`).
 
 ## Threading
 
@@ -129,10 +134,10 @@ read, hit, input) — see `engine/xrGame.md` / `engine/engine-core.md`.
 - **Registering to an unknown name** → warning + `callstack()`, handler dropped. The name must be in
   `axr_main.intercepts` (the big static table at `axr_main.script`) or added via `AddScriptCallback`.
 - **`nil` handler** → warning, ignored.
-- **`on_xml_read` does not use `intercepts`** — it is diverted into `dxml_core.xmlCallbacks`; looking
-  for XML handlers in `intercepts` will mislead.
+- **`on_xml_read` uses `intercepts` now** (since 2026.10.11). Older notes describing a separate
+  `dxml_core.xmlCallbacks` list are stale.
 - **Module load order** for `on_game_start` is filesystem order of `$game_scripts$` root; don't rely
-  on cross-module ordering beyond the per-callback registration index.
+  on registration order across modules — declare it with `before_funcs`/`after_funcs` or a tier.
 
 ## Subtleties
 
@@ -154,7 +159,7 @@ read, hit, input) — see `engine/xrGame.md` / `engine/engine-core.md`.
 - Bus registry (repo override): `gamedata/scripts/axr_main.script` (`intercepts` table,
   `callback_add/set/unset`, `make_callback`, `on_game_start`)
 - Ordering helper: `gamedata/scripts/_g_patches.script:sort_func_values_ascend`
-- XML divert: `gamedata/scripts/dxml_core.script` (`xmlDispatch`, RSC override) → `modlayer/dxml.md`
+- XML event: `gamedata/scripts/dxml_core.script` (`COnXmlRead`) → `modlayer/dxml.md`
 
 ## Maintenance
 

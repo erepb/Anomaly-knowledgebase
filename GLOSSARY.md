@@ -1,9 +1,9 @@
 ---
 domain: meta
 tags: [meta, engine, modlayer, dltx, dxml, unlocalizer, ltx, callbacks, renderer, ui]
-sources: [src/xrCore/Xr_ini.cpp, src/Layers/xrRenderPC_R4/r4.h, src/xrServerEntities/script_engine_export.cpp, src/xrGame/ui_defs.h, src/xrGame/ui_base.cpp, gamedata/scripts/dxml_core.script, README.md, DXML.md]
+sources: [src/xrCore/Xr_ini.cpp, src/Layers/xrRenderPC_R4/r4.h, src/xrServerEntities/script_engine_export.cpp, src/xrGame/ui_defs.h, src/xrGame/ui_base.cpp, gamedata/scripts/dxml_core.script, README.md, docs/DXML.md]
 related: [INDEX.md, CONVENTIONS.md, modlayer/config-ltx.md, modlayer/dxml.md, engine/renderer.md, flows/ui-scaling.md]
-updated: 2026-08-05
+updated: 2026-11-13
 verified: code
 ---
 
@@ -54,7 +54,7 @@ first for any task. Anchors below are linkable from other KB files (e.g. `GLOSSA
   `DLTX`, `FS.file_list(... "mod_"...)`). Full flow: `flows/dltx-config-load.md`.
 - <a id="dxml"></a>**DXML** — Lua-side XML manipulation (by demonized). Lets mods transform XML files
   before the engine parses them, via `modxml_<name>.script` files registering the `on_xml_read`
-  callback. The engine hands Lua an `xml_obj` DOM. Full guide: `DXML.md`. See `modlayer/dxml.md`.
+  callback. The engine hands Lua an `xml_obj` DOM. Full guide: `docs/DXML.md`. See `modlayer/dxml.md`.
 - <a id="xml_obj"></a>**xml_obj / DOM** — the DOM-like Lua object DXML exposes; methods include
   `query`, `getText`, `setText`, `setElementAttr`, `add`, `insertFromXMLString`,
   `insertFromXMLFile`. Defined in `gamedata/scripts/dxml_core.script` (uses `slaxml.script`).
@@ -207,6 +207,21 @@ first for any task. Anchors below are linkable from other KB files (e.g. `GLOSSA
 - <a id="gamma-efp"></a>**GAMMA / EFP** — large Anomaly modpacks the exes are tested against /
   support. Not in this repo.
 - <a id="sdk"></a>**SDK** — level/asset authoring tools under `sdk/`. Separate from runtime engine.
+- <a id="spawn-overlay"></a>**spawn overlay / level pack** — load-time edits on top of `all.spawn`:
+  `spawn_overlays.ltx` sections (graph links, template remove/patch/replace, path remove, level cut), SDK
+  fragments under `spawns\<level>\`, and *level packs* (extra `spawns\<name>.spawn` files whose new levels,
+  objects and paths join the base). Ids are never keys; objects/levels are addressed by name. See
+  `features/spawn-overlays.md`.
+- <a id="shader-bus"></a>**shader bus** — named float4 lanes from Lua to shaders: a shader declares
+  `bus_<id>`, a script registers `<id>` and writes it via a token. Replaces `shader_param_1..8` /
+  `s3ds_param_1..4`. See `features/shader-bus.md`, `docs/shader_bus.md`.
+- <a id="script-attachment"></a>**script attachment** — a Lua-created model attached to a game object,
+  HUD item, the camera or another attachment (`script_attachment` class), with its own bones, physics,
+  light, 3D UI and shaders. Also covers 3D UI icons (`CUI3dStatic`) and first-person arm IK/hand poses.
+  See `features/script-attachments.md`.
+- <a id="callback-tier"></a>**callback tier / ordering** — `RegisterScriptCallback(name, fn, before_funcs,
+  after_funcs, priority)`: Pre → Normal → Post tiers, topologically ordered inside each tier
+  (`docs/axr_main.md`, `flows/lua-callback-lifecycle.md`).
 
 ## Maintenance
 

@@ -3,7 +3,7 @@ domain: flows/camera-pp-effectors
 tags: [xrgame, camera, effector, postprocess, shake, bobbing, zone, flow]
 sources: [src/xrGame/ActorEffector.cpp, src/xrGame/ActorEffector.h, src/xrGame/CameraEffector.h, src/xrGame/EffectorFall.cpp, src/xrGame/EffectorBobbing.cpp, src/xrGame/EffectorZoomInertion.cpp, src/xrGame/EffectorShot.cpp, src/xrGame/pp_effector_custom.cpp, src/xrGame/pp_effector_distance.cpp, src/xrGame/PostprocessAnimator.cpp, src/xrGame/script_effector.cpp, src/xrGame/level_script.cpp]
 related: [flows/actor.md, flows/render-frame.md, flows/anomaly-zones.md, flows/weapon-state-machine.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-06
+updated: 2026-11-13
 verified: code
 ---
 
@@ -66,6 +66,13 @@ by distance to a source (zone glow fading with range). `bOverlap` lets one effec
   `level.remove_pp_effector(id)`, plus `set_pp_effector_factor`/`_factor2`. Custom ids are allocated
   from a high base (`effCustomEffectorStartID`). This is the main mod entry for screen FX/cutscene
   camera. `CScriptEffector` is the Lua-controlled PP effector wrapper.
+- **Added 2026.09–2026.11:** a 5th `add_cam_effector` overload with a trailing `speed` (anim playback
+  speed, returns the length); PP queries `level.get_pp_effector_factor(id)`, `get_pp_effector_length(id)`,
+  `check_pp_effector(id)` (`PostprocessAnimator`); `device():set_cam_attached_fov` /
+  `get_cam_attached_fov` (`script_render_device_script.cpp`) — projection FOV for camera-attached
+  draws (default 83, global — restore when done; used by `eSA_CamAttached` script attachments, see
+  `features/script-attachments.md`); actor `get/set_actor_damage_stagger_time_factor` scales the
+  slowdown (`time_to_lock` accel) a monster hit applies to the actor (`base_monster_feel.cpp`).
 - **Zones:** `CZoneEffector` (`zone_effector.cpp`, the `flows/anomaly-zones.md` postprocess seam)
   creates a distance-driven `CPostprocessAnimatorLerp` as the actor nears a zone, factor modulated by
   outfit protection. *(agent-traced — its existence verified in F27.)*

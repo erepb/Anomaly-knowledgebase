@@ -2,12 +2,18 @@
 domain: flows/spawns-alife-graphs-configs
 tags: [modlayer, gameplay, unpacked, config, ltx, data, spawns, alife, graph, story-id, flow]
 sources: [unpacked/spawns/all.spawn, unpacked/configs/alife.ltx, unpacked/configs/game_graphs.ltx, unpacked/configs/game_story_ids.ltx, unpacked/configs/game_spawn_story_ids.ltx, unpacked/configs/game_maps_single.ltx, unpacked/configs/patrol_paths.ltx, unpacked/configs/dynamic_spawn.ltx, gamedata/configs/patrol_paths.ltx, src/xrGame/patrol_point.cpp]
-related: [flows/alife-online-offline.md, flows/alife-services.md, flows/sim-board.md, flows/scripted-squad.md, flows/smart-terrain-core.md, flows/pda-map-news.md, flows/gameplay-boot.md, flows/per-smart-logic-configs.md, flows/creatures-actor-configs.md, modlayer/gameplay/configs-data.md, modlayer/config-ltx.md, GLOSSARY.md]
-updated: 2026-08-17
+related: [features/spawn-overlays.md, flows/alife-online-offline.md, flows/alife-services.md, flows/sim-board.md, flows/scripted-squad.md, flows/smart-terrain-core.md, flows/pda-map-news.md, flows/gameplay-boot.md, flows/per-smart-logic-configs.md, flows/creatures-actor-configs.md, modlayer/gameplay/configs-data.md, modlayer/config-ltx.md, GLOSSARY.md]
+updated: 2026-11-13
 verified: code
 ---
 
 # Flow: spawns / ALife / graphs configs (F123)
+
+> **Since 2026.10.11 `all.spawn` is no longer edit-only-via-SDK.** The engine applies text overlays,
+> SDK fragments and whole level packs on top of it at every spawn-registry load —
+> `gamedata/configs/spawn_overlays.ltx` (DLTX-moddable) and `spawns\<level>\*.spawn|*.game`. See
+> `features/spawn-overlays.md`. Statements below about `all.spawn` being the only placement source
+> describe the shipped base file.
 
 The **world-instance + ALife tier** — the data that places every authored object in the world and tunes
 the ALife simulator: the binary `spawns/all.spawn`, the `[alife]` tuning block, the game-graph
@@ -63,8 +69,11 @@ transitions) reference by id. `[graph_points_draw_color_palette]` is debug-draw 
 
 ## `game_maps_single.ltx` — level & world-map registry (verified)
 
-`[level_maps_single]` lists every level (jupiter, k00_marsh, l01_escape, … l13_generators) — the level
-registry the loader + level transitions use. `[def_map]`/`[global_map]` give the PDA world-map layout
+`[level_maps_single]` lists every level (jupiter, k00_marsh, l01_escape, … l13_generators) — the PDA
+local-map list: the only engine reader is `CUIMapWnd::Init` (`ui/UIMapWnd.cpp`); scripts read it plus the
+per-level `[<level>] weathers` key (`level_weathers`, `ui_pda_radio_tab`, debug menus). It is **not** what the
+loader uses: the engine's level ids/names come from `game.ltx [levels]` → `[levelNN]` (`game_levels.ltx`) and
+the game graph, and `CApplication::Level_Scan` (`xrEngine/x_ray.cpp`) lists level folders on disk. `[def_map]`/`[global_map]` give the PDA world-map layout
 (`bound_rect`/`texture`, F39), and `[___level_music_tracks]` holds per-level music windows (→ F116).
 `game_maps_mp.ltx` is the MP variant.
 
@@ -113,14 +122,17 @@ graph** (`game_graphs.ltx`), with **smart_terrain/sim_board** (F72/F86) populati
 - **`all.spawn` is binary and new-game-only** — editing it requires the SDK/ACDC, and changes affect only
   **new games** (saves carry their own ALife state). This is why "I edited the spawn but my save didn't
   change" is expected.
-- **`patrol_paths.ltx` is a stub** — don't add patrol geometry there; paths live in `all.spawn` as `way_`
-  elements. A walker scheme's `path_walk` resolves against the spawn, not this file.
+- **`patrol_paths.ltx` is a stub in base content** — compiled paths live in `all.spawn` as `way_`
+  elements. Its sections now add paths on top of the spawn; one with a `level = <name>` key also
+  replaces a compiled path of the same name, one without is skipped on a name clash
+  (`features/spawn-overlays.md`).
 - **Story ids are the stable handle** — runtime object ids change between sessions; `game_story_ids.ltx` is
   how scripts reliably find a placed object.
 - **`game_graphs.ltx` names ≠ live objects** — it's the graph-point catalog; the actual server objects come
   from `all.spawn`. A mismatch (renamed smart) breaks sim references.
-- **DLTX applies to the text files only** — `all.spawn` is not patchable via DLTX; no `gamedata/` overrides
-  at writing.
+- **DLTX reaches the spawn through overlays** — `all.spawn` itself is still binary, but
+  `spawn_overlays.ltx` (and `mod_spawn_overlays_*.ltx`) edit links, templates and paths at load time
+  (`features/spawn-overlays.md`).
 
 ## Deeper
 

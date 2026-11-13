@@ -3,7 +3,7 @@ domain: flows/physics-objects-ragdoll
 tags: [xrgame, physics, ragdoll, death, shell, lamp, flow]
 sources: [src/xrGame/PhysicsShellHolder.cpp, src/xrGame/PhysicsShellHolder.h, src/xrGame/PhysicObject.cpp, src/xrGame/PhysicObject.h, src/xrGame/PhysicsSkeletonObject.cpp, src/xrGame/HangingLamp.cpp, src/xrGame/CharacterPhysicsSupport.cpp, src/xrGame/CharacterPhysicsSupport.h, src/xrGame/character_shell_control.cpp]
 related: [engine/physics-collision.md, flows/item-base.md, flows/damage-hit.md, flows/object-lifecycle.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-06
+updated: 2026-11-13
 verified: code
 ---
 
@@ -95,6 +95,13 @@ Game-side create/activate and the death transition run on the main thread; the p
 by `xrPhysics` (its own update), and the body interpolates its render transform on the main thread.
 
 ## Failure & edge cases
+
+- **Script-frozen shells ignore each other (2026.11.09)** — `CPHCollideValidator` gained a
+  `cbClassFrozen` / `cbNCClassFrozen` class pair; shells frozen from script (`physics_shell_scripted.cpp`)
+  get those bits (alongside the existing `cbNCStatic`), so frozen shells stop colliding with one another.
+- **Scale is a vector** — physics shell/element scale is per-axis (`PHShell`, `PHElement`); script
+  `get_scale()` returns a vector and `set_scale()` takes a number or a vector. Script attachments use it
+  (`features/script-attachments.md`).
 
 - **Ragdoll only on death:** a living hit pushes via the movement controller; the kinematics→physics
   switch (`esDead`) happens once, in `CreateShell`. A body that "T-poses" or doesn't flop usually means

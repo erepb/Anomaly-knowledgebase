@@ -3,7 +3,7 @@ domain: flows/stalker-execution
 tags: [xrgame, ai, stalker, movement, sight, animation, fire, flow]
 sources: [src/xrGame/ai/stalker/ai_stalker.h, src/xrGame/ai/stalker/ai_stalker.cpp, src/xrGame/ai/stalker/ai_stalker_inline.h, src/xrGame/ai/stalker/ai_stalker_fire.cpp, src/xrGame/ai/stalker/ai_stalker_cover.cpp, src/xrGame/sight_manager.cpp, src/xrGame/sight_action.cpp, src/xrGame/stalker_combat_planner.cpp, src/xrGame/stalker_combat_action_base.cpp, src/xrGame/action_planner.h, src/xrGame/stalker_animation_manager.cpp, src/xrGame/movement_manager.cpp, src/xrGame/detail_path_manager.cpp, gamedata/scripts/callbacks_gameobject.script, gamedata/scripts/lua_help_ex.script]
 related: [flows/ai-planner.md, flows/ai-perception.md, flows/smart-cover.md, flows/weapon-fire-callbacks.md, flows/animation-callbacks.md, flows/monster-ai-control.md, flows/damage-hit.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -100,6 +100,23 @@ untouched NPC behaves exactly as before. The Lua surface is catalogued in
   on every subsequent invalidation, and two standing invalidators (enemy within ~3 m of the held
   cover, a smart cover without a loophole) re-ask on each combat action update — a subscriber that
   denies unconditionally must cap itself.
+
+Added 2026.09–2026.11:
+
+- **`npc:set_movement_hold(bool)`** → `CAI_Stalker::movement_hold` — per-NPC movement freeze lever
+  (`script_game_object_inventory_owner.cpp`).
+- **`npc_dont_drop_weapons_on_death`** cvar — `stalker_death_actions.cpp` skips `SetDropManual` on the
+  NPC's weapons at death.
+- **`npc_relaxed_idle_mode 0..2`** — relaxed free-standing torso idle source: 0 vanilla (player
+  safemode pose), 1 the NPC's own `idle_0`, 2 a stable per-NPC pick across authored variants
+  (`stalker_animation_torso.cpp`).
+- **Smart-cover reload sync** — `smart_cover_animation_selector.cpp` caps the cover animation's blend
+  speed during `eWorldOperatorSmartCoverReload` so it can't finish before the weapon's reload
+  (`CWeapon::MotionTimeLeft`), preventing double reloads. A separate "double reload" fix was reverted;
+  aimers `fill_bones` went back to `Bone_GetAnimPos` (smart-cover aiming, #830).
+- Tri-state-reload weapons can be unjammed by NPCs (`WeaponAutomaticShotgun.cpp`).
+- **Throw force hooks** — `npc_on_missile_throw_force` / `actor_on_missile_throw_force`
+  (`_G.CActor__GetMissileThrowForce`, `Actor.cpp`; non-positive return is rejected and logged).
 
 ## Animation (agent-traced)
 

@@ -1,9 +1,9 @@
 ---
 domain: flows/monster-ai-control
 tags: [xrgame, ai, monster, control, fsm, state, animation, flow]
-sources: [src/xrGame/ai/monsters/control_manager.cpp, src/xrGame/ai/monsters/control_manager.h, src/xrGame/ai/monsters/control_combase.h, src/xrGame/ai/monsters/control_animation.cpp, src/xrGame/ai/monsters/control_movement.cpp, src/xrGame/ai/monsters/control_jump.cpp, src/xrGame/ai/monsters/basemonster/base_monster.h, src/xrGame/ai/monsters/basemonster/base_monster_think.cpp, src/xrGame/ai/monsters/monster_enemy_manager.cpp, src/xrGame/ai/monsters/pseudogigant/pseudo_gigant.cpp, src/xrGame/ai/monsters/burer/burer_state_attack_tele.h, src/xrGame/ai/monsters/burer/burer_state_attack_tele_inline.h]
+sources: [src/xrGame/ai/monsters/basemonster/base_monster.cpp, src/xrGame/script_monster_enemy_info.h, src/xrGame/script_monster_home_info.h, src/xrGame/ai/monsters/control_manager.cpp, src/xrGame/ai/monsters/control_manager.h, src/xrGame/ai/monsters/control_combase.h, src/xrGame/ai/monsters/control_animation.cpp, src/xrGame/ai/monsters/control_movement.cpp, src/xrGame/ai/monsters/control_jump.cpp, src/xrGame/ai/monsters/basemonster/base_monster.h, src/xrGame/ai/monsters/basemonster/base_monster_think.cpp, src/xrGame/ai/monsters/monster_enemy_manager.cpp, src/xrGame/ai/monsters/pseudogigant/pseudo_gigant.cpp, src/xrGame/ai/monsters/burer/burer_state_attack_tele.h, src/xrGame/ai/monsters/burer/burer_state_attack_tele_inline.h]
 related: [flows/ai-planner.md, flows/ai-perception.md, flows/animation-callbacks.md, flows/ai-squad-logic.md, flows/options-runtime.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -122,8 +122,42 @@ scheduled object update (`flows/object-lifecycle.md`). Bone calc is the usual wo
   defensive `!selected_object || getDestroy()` early-out in `ExecuteTeleFire`. Any new ability caching
   an object pointer needs the same pair.
 
+## Lua combat seam (merged 2026.10.11 / 2026.11.09, dami.sirbu)
+
+A per-monster Lua surface over the FSM + control manager. Full signatures and caveats are in
+`lua_help_ex.script` (search "CBaseMonster -"). Everything is per object, **not serialized** (re-apply on
+`net_spawn`), and defaults to vanilla behaviour.
+
+- **Combat decision callback** — `CBaseMonster::script_combat_substate` calls `_G.CMonsterCombatAction`
+  (bus callback `monster_on_combat_action`) at most once per monster per frame (cached by
+  `m_script_substate_frame`) with `(monster, enemy, dist, enemy_strength, can_jump)`; a returned
+  `EMonsterState` id is a *proposal*. Consumed by the shared attack selectors
+  (`monster_state_attack_inline.h`, `group_state_attack_inline.h`) and by **every species state
+  manager** (`*_state_manager.cpp`); honored only if that species registers the state and its start
+  conditions pass. Poltergeist takes none. Enum `monster_state` in `lua_help_ex`.
+- **Readers** — `get_monster_state` (deepest FSM substate), rank/morale/aura influences,
+  `get_monster_enemy_info` / `get_monster_home_info` (`script_monster_enemy_info.h`,
+  `script_monster_home_info.h`), extended `get_monster_hit_info` / `get_sound_info`,
+  `get_monster_cover_vertex`.
+- **Param setters** — attack distance, jump params/flags, run-attack, attack-on-move, aura falloff,
+  turn factor (`CControlDirectionBase::update_frame`), and species families (chimera, burer gravi/tele,
+  controller tube/stamina, poltergeist, bloodsucker vis timing).
+- **Movement override** — `set_monster_dest` / `clear_monster_dest`, re-asserted in
+  `CControlPathBuilderBase::update_target_point`.
+- **Maneuvers** — `try_monster_jump` / `_rotation_jump` / `_run_attack` / `_threaten`,
+  `monster_capture_control` / `monster_release_control`; all defer to a scheme owner (script control).
+  `set_monster_melee_strike` arms the dormant `CControlMeleeJump` rear spin-strike.
+- **Fixes in the same series** — chimera attack geometry guarded against bad configs (sqrt clamp below
+  jump range); the dead `set_monster_aggressive` flag removed. Dog consults the callback only when not
+  under control.
+
+Other monster changes this period: phantoms can die / switch to shoot when hit during `stBirth`
+(`ai/phantom/phantom.cpp`); `CALifeMonsterBrain::process_task` guards a nil smart-terrain task.
+
 ## Deeper
 
+- Lua seam: `basemonster/base_monster.cpp:CBaseMonster::script_combat_substate`,
+  `script_game_object3.cpp` (monster readers/setters), `control_manager_custom.cpp`
 - Manager: `src/xrGame/ai/monsters/control_manager.cpp`/`.h` (`capture`, `capture_pure`, `release`,
   `update_frame`/`update_schedule`, `m_control_elems`), `control_combase.h` (`CControl_Com`,
   `CControl_ComPure`, `CControl_ComCustom`, `CControl_ComBase`)

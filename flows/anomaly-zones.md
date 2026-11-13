@@ -3,7 +3,7 @@ domain: flows/anomaly-zones
 tags: [xrgame, zone, anomaly, feel-touch, blowout, hit, campfire, flow]
 sources: [src/xrGame/CustomZone.cpp, src/xrGame/CustomZone.h, src/xrGame/zone_effector.cpp, src/xrGame/RadioactiveZone.cpp, src/xrGame/GraviZone.cpp, src/xrGame/MosquitoBald.cpp, src/xrGame/ZoneCampfire.cpp, src/xrGame/NoGravityZone.cpp]
 related: [flows/damage-hit.md, flows/detector-artefact.md, flows/object-lifecycle.md, flows/anomaly-field-binders.md, flows/zones-anomaly-configs.md, engine/physics-collision.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-11-13
 verified: code
 ---
 
@@ -120,6 +120,12 @@ Main thread: `shedule_Update` (deferred scheduler channel) and `UpdateCL`/`Updat
 near camera). Feel::Touch contact runs during update. No worker-thread interaction.
 
 ## Failure & edge cases
+
+- **Floating artefacts (2026.10.11)** — `CBaseGraviZone::exit_Zone` deactivates telekinesis on a
+  non-living physics object leaving the zone (and stops its tele particles), so objects don't stay
+  suspended after exiting (OGSR port).
+- **Zone volumes don't block NPC sight** — zone spatials carry `STYPE_FEELVISIONIGNORE`
+  (`flows/ai-perception.md`).
 
 - **Zones do NOT spawn artefacts in this code path.** The only artefact-spawn logic is commented-out
   ALife server code (`alife_anomalous_zone.cpp`); zone subclasses have no `SpawnArtefact`. Artefact

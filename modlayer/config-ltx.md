@@ -30,10 +30,12 @@ if missing; listed keys replace the base's, unmentioned base keys are kept, new 
 operators: `>key = a,b` append to a list, `<key = a` remove from a list, `key = DLTX_DELETE` delete.
 A duplicate plain `[section]` (no `!`/`@`) is a fatal.
 
-This repo's own `mod_*.ltx` (root of `configs/`, re-listed 2026-08-17): `mod_system_base_hud.ltx`,
+This repo's own `mod_*.ltx` (root of `configs/`, re-listed 2026-11-13): `mod_system_base_hud.ltx`,
 `mod_system_knife.ltx`, `mod_system_flashlight_definition.ltx`, `mod_system_shader_crosshair.ltx`,
-`mod_system_spawn_antifreeze_ignore.ltx`, `mod_system_anomaly_fixes.ltx`, `mod_script_dxml.ltx`
-(plus the non-DLTX `patrol_paths.ltx`). `mod_system_signal_light.ltx` was **deleted** upstream (signal
+`mod_system_spawn_antifreeze_ignore.ltx`, `mod_system_anomaly_fixes.ltx`, `mod_script_dxml.ltx`,
+`mod_spawn_overlays_meadow.ltx` (a DLTX mod of `spawn_overlays.ltx`, see `features/spawn-overlays.md`),
+plus the non-mod roots `patrol_paths.ltx` and `spawn_overlays.ltx`. Bolts are no longer in the spawn
+antifreeze ignore list. `mod_system_signal_light.ltx` was **deleted** upstream (signal
 light / lamp LTX fix) — don't look for it.
 
 `mod_system_anomaly_fixes.ltx` is a deliberate collection point: base-Anomaly config *bugs* fixed from

@@ -3,7 +3,7 @@ domain: flows/trade-economy
 tags: [modlayer, gameplay, unpacked, lua, trade, economy, money, npc, flow]
 sources: [unpacked/scripts/trade_manager.script, unpacked/scripts/axr_trade_manager.script, unpacked/scripts/ui_inventory.script, unpacked/scripts/utils_item.script, unpacked/scripts/utils_ui.script, unpacked/scripts/actor_menu_inventory.script, unpacked/scripts/game_difficulties.script, unpacked/scripts/xr_logic.script, unpacked/scripts/xr_motivator.script, unpacked/scripts/bind_trader.script, unpacked/configs/items/trade/trade_generic.ltx, unpacked/configs/items/trade/trade_stalker_sidorovich.ltx, unpacked/configs/items/trade/gulag_job_trade_buy_sell.ltx, unpacked/configs/items/trade/presets/trade_presets.ltx, unpacked/configs/items/trade/presets/trade_discounts.ltx, unpacked/configs/beh_gulag_jobs.ltx, src/xrGame/trade2.cpp, src/xrGame/InventoryOwner.cpp, src/xrGame/UIGameSP.cpp]
 related: [flows/dialog-trade.md, flows/inventory.md, flows/dialog-system-lua.md, flows/monster-schemes.md, flows/scheme-engine-core.md, flows/condlist-library.md, flows/ai-squad-logic.md, flows/gameplay-boot.md, flows/actor-menu-inventory-ui.md, flows/axr-managers.md, modlayer/gameplay/trade-economy.md, modlayer/gameplay/axr-addon.md, modlayer/gameplay/dialogs-info.md, GLOSSARY.md]
-updated: 2026-06-11
+updated: 2026-11-13
 verified: code
 ---
 
@@ -175,6 +175,11 @@ online NPCs via callbacks and job logic; offline NPCs neither sell nor restock (
 timers only advance against game time and are checked on talk/update).
 
 ## Failure & edge cases (verified unless noted)
+
+- **Trader/stash drop events for antifreeze-pending items (2026.11.09)** — `CAI_Trader` and
+  `CInventoryBox` ignore drop events for items spawn antifreeze has not spawned yet
+  (`ai_trader.cpp`, `InventoryBox.cpp`). Sidorovich/Forester binders also fire
+  `sid_forester_on_item_take` / `sid_forester_on_item_drop` (`callbacks_gameobject.script`).
 
 - **Dead sell loop (latent bug)**: both sell loops iterate `for i = count, 1 do` *without* a
   `-1` step — Lua's default step is +1, so the body runs only when `count == 1`. An NPC that

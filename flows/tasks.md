@@ -3,7 +3,7 @@ domain: flows/tasks
 tags: [xrgame, task, quest, objective, info-portion, pda, map, lua, flow]
 sources: [src/xrGame/GameTask.cpp, src/xrGame/GameTask.h, src/xrGame/GametaskManager.cpp, src/xrGame/GametaskManager.h, src/xrGame/alife_smart_terrain_task.cpp, src/xrGame/stalker_alife_task_actions.cpp]
 related: [flows/relations-info.md, flows/dialog-trade.md, flows/ai-squad-logic.md, flows/save-load.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-11
+updated: 2026-11-13
 verified: code
 ---
 
@@ -112,6 +112,10 @@ disambiguate the word "task."
 Main thread (`UpdateTasks` on the level update; Lua single-threaded).
 
 ## Failure & edge cases
+
+- **Escort tasks (2026.11.09)** — escort target functors return no target while the escort squad is
+  missing instead of crashing (`aaaa_script_fixes_mp.script`); the warfare Ecologist escort task points
+  at an existing target functor (`configs/misc/task/mod_task_manager_warfare_ecolog_escort_fix.ltx`).
 
 - **Completion is polled, not pushed:** a task only re-checks its info-portions in `UpdateTasks`; there
   is no event when an info is granted. A task whose `complete_info` is already satisfied completes on the

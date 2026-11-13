@@ -3,7 +3,7 @@ domain: flows/hud-ui-load
 tags: [xrgame, ui, hud, xml, cuiwindow, dxml, shaders, flow]
 sources: [src/xrXMLParser/xrXMLParser.cpp, src/xrGame/ScriptXMLInit.cpp, src/xrGame/ui/UIXmlInit.cpp, src/xrGame/ui/UIWindow.cpp, src/xrGame/ui/UIWindow.h, src/xrGame/ui/UIWindow_script.cpp, src/xrGame/ui/uiscriptwnd_script.h, src/xrGame/ui/UI3tButton.cpp, src/xrGame/ui/UIStatic.cpp, src/xrGame/UIStaticItem.cpp, src/xrGame/UIGameCustom.cpp, gamedata/scripts/lua_help_ex.script, gamedata/shaders/r3/hud_default.ps, gamedata/shaders/r3/hud_font.ps]
 related: [flows/dxml-xml-interception.md, flows/engine-boot-frame.md, flows/lua-callback-lifecycle.md, flows/renderer-factory-bridges.md, flows/pda-map-news.md, flows/ui-scaling.md, features/pda-tab-scroll.md, modlayer/dxml.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -110,6 +110,32 @@ Lua side in `gamedata/scripts/lua_help_ex.script`.
 - **Frame-line rendering gained two opt-ins** (cap scaling, crisp `border_*` bands) plus an explicit
   `vertical` argument on `CUIInteractiveBackground::InitState`, since a frameline must know its
   orientation before `InitTexture` asserts on slice dimensions — see `flows/ui-scaling.md`.
+
+Added 2026.09–2026.11 (`UIWindow.h`, `UIWindow_script.cpp`, `UIStatic.h`):
+
+- **Global mouse capture stack** — `CUIWindow::MouseCapturer()` is static: one stack of capturing
+  windows, topmost wins, release restores the one underneath (a popup keeps capture across a scrollbar
+  drag inside it). The capturer need not be a child of the receiver. `SetMouseCapture`,
+  `ReleaseMouseCapture`, `IsMouseCapturer`; `FeedCursorDelta` / `OnMouseMoveRelative` for relative
+  drags. The fixed scrollbar captures on itself, not its thumb button; `CUIScrollView` drag-scrolls
+  only from clicks on empty list space (`m_pad_drag_active`).
+- **Hide lock** — `SetHideLock(true)` hides and refuses later `Show(true)`.
+- **Clip rects** — `EnableClip` / `SetClipRect` / `ResetClipRect` clip a window's children (frame
+  lines and text are not clipped); `CUIWindow::AnyClipEnabled`.
+- **`FindChild(name)` + casts** — exported to Lua with `cast_<Class>` helpers (`UI_WINDOW_CAST` macro:
+  `cast_Button`, `cast_CheckButton`, `cast_ActorMenu`, `cast_MotionIcon`, …) to recover the concrete type
+  of an engine-created child.
+- **Statics** — `SetLineTo(x1,y1,x2,y2,thickness)` lays a static along a segment;
+  heading pivot/offset getters/setters. `CUICheckButton::SetVisualState(-1..3)` forces a visual
+  state; `CUIProgressBar::SetProgressPosInstant`.
+- **`CUIPropertiesBox::ShowAt(parent_rect, point)`** — opens the box clamped inside a parent rect.
+- **Combobox** keeps one render slot so its list draws under the cursor.
+- **Custom statics are lock-guarded** (`CUIGameCustom::m_customs_lock`) — captions are mutated by
+  game logic and drawn by the render thread (MT).
+- **Main-menu modal dialogs** are drawn outside the Shniaga post-process pass (`MainMenu.cpp`,
+  `UIMMShniaga.cpp`).
+- **3D icons** — `CUI3dStatic`, see `features/script-attachments.md`.
+- `level` helpers: `world2ui_with_depth`, `world2ui_many`, `top_input_receiver` (UI holds input).
 
 ## Isolation ledger (the seams)
 

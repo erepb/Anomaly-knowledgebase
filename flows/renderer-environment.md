@@ -1,9 +1,9 @@
 ---
 domain: flows/renderer-environment
 tags: [engine, renderer, r4, dx11, flow]
-sources: [src/Layers/xrRender/dxEnvironmentRender.cpp, src/Layers/xrRender/dxEnvironmentRender.h, src/Layers/xrRender/dxRainRender.cpp, src/Layers/xrRender/dxThunderboltRender.cpp, src/Layers/xrRender/dxLensFlareRender.cpp, src/Layers/xrRender/xr_effgamma.cpp, src/Layers/xrRender/xr_effgamma.h, src/Layers/xrRenderPC_R4/r4_R_rain.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_draw_rain.cpp]
+sources: [src/xrEngine/Environment_misc.cpp, src/xrEngine/Rain.cpp, src/xrEngine/thunderbolt.cpp, docs/env_mods.md, gamedata/configs/environment/env_mods/_template.ltx, src/Layers/xrRender/dxEnvironmentRender.cpp, src/Layers/xrRender/dxEnvironmentRender.h, src/Layers/xrRender/dxRainRender.cpp, src/Layers/xrRender/dxThunderboltRender.cpp, src/Layers/xrRender/dxLensFlareRender.cpp, src/Layers/xrRender/xr_effgamma.cpp, src/Layers/xrRender/xr_effgamma.h, src/Layers/xrRenderPC_R4/r4_R_rain.cpp, src/Layers/xrRenderPC_R4/r4_rendertarget_draw_rain.cpp]
 related: [flows/renderer-post-process.md, flows/renderer-backend.md, flows/renderer-resources-shaders.md, flows/renderer-factory-bridges.md, flows/render-frame.md, engine/renderer.md, GLOSSARY.md]
-updated: 2026-06-07
+updated: 2026-11-13
 verified: code
 ---
 
@@ -101,6 +101,23 @@ applies it at the **display hardware** level: DX10/11 via `IDXGIOutput::SetGamma
   the in-frame `phase_lut`.
 - **Config:** rain density/scale cvars, wet-surface distance/quality, flare flags (`ps_r2_anomaly_flags`),
   heat-vision (disables flares), gamma/brightness/contrast.
+
+## Game-side environment state changes (2026-09 → 2026-11)
+
+Not renderer code, but they change what the environment draws:
+
+- **Env modifiers from LTX** — `CEnvironment::mods_reload` (`xrEngine/Environment_misc.cpp`) first
+  tries `CEnvironment::mods_load_ltx`: `configs\environment\env_mods\<level>.ltx` replaces the binary
+  `level.env_mod` entirely (an empty .ltx disables the level's modifiers). Console `env_mods_reload`.
+  Format, blending math and `use_flags`: `docs/env_mods.md`; copyable section:
+  `env_mods/_template.ltx`.
+- **Rain wetness is frame-rate independent** — `Rain.cpp` scales wet/dry rate by `Device.fTimeDelta`
+  over `WETNESS_CHANGE_TIME` (166 s at multiplier 1; `ssfx_wetness_multiplier` x = wet, y = dry).
+  `level.set_rain_wetness(0..1)` writes `Environment().wetness_factor` directly.
+- **Rain loop volume hook** — sampled once at rain onset via `IGame_Persistent::OnRainSound` (see
+  `flows/sound-music.md`).
+- **Thunderbolt flash no longer stacks while paused** — `thunderbolt.cpp` keeps base/flash colours
+  separately (`flash_applied`), so the flash is applied over the base once rather than accumulating.
 
 ## Threading
 

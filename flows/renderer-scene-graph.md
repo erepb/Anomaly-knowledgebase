@@ -3,7 +3,7 @@ domain: flows/renderer-scene-graph
 tags: [engine, renderer, r4, dx11, deferred, flow]
 sources: [src/Layers/xrRender/r__dsgraph_manager.h, src/Layers/xrRender/r__dsgraph_manager.cpp, src/Layers/xrRender/r__dsgraph_build.cpp, src/Layers/xrRender/r__dsgraph_render.cpp, src/Layers/xrRender/r__dsgraph_types.h, src/Layers/xrRender/r__sector.cpp, src/Layers/xrRenderPC_R4/r4.h, src/Layers/xrRender/light.h]
 related: [flows/render-frame.md, flows/renderer-resources-shaders.md, flows/renderer-visibility.md, flows/renderer-backend.md, engine/renderer.md, GLOSSARY.md]
-updated: 2026-06-06
+updated: 2026-11-13
 verified: code
 ---
 
@@ -114,6 +114,25 @@ agent-traced; the render functions verified*).
 - **Lighting seam:** shadow passes read `RGraph.mapStaticPasses[..]`/`mapDynamicSorted` sizes to decide
   deferred-vs-forward shadow rendering (`lights_render.cpp`, `R_sun.cpp`).
 - **Links:** built/consumed by `flows/render-frame.md`; LOD impostors via `r_dsgraph_render_lods`.
+
+## Changes merged 2026-09 → 2026-11
+
+- **R4 full-detail distance** — `r4_full_detail_distance_scale` (0.1..1, 1 = off).
+  `R4FullDetailRejectStatic` (`r__dsgraph_build.cpp`) drops static non-LOD visuals in the normal phase
+  beyond `max(100, far_plane * scale)` once their SSA falls under a raised `r_ssaDISCARD` threshold
+  that ramps up to 12x toward the far plane; `MT_LOD` visuals and `eIgnoreOptimization` visuals are
+  kept so the normal LOD switch still works.
+- **`mapLOD` cleared on traverse** (`r__dsgraph_manager.cpp`) — fixes the LOD list growing across sun
+  cascades.
+- **Multirender for 3D icons** — game objects drawn as 3D UI icons are forced into instance
+  multirender (`script_attachment_manager.cpp`, `set_skip_marker`), which also sets
+  `vis_data::skip_marker` (`vis_common.h`). As of this sync no renderer code reads `skip_marker`; the
+  multirender path is what matters (`features/script-attachments.md`).
+- **`IRenderable::renderable_RenderUI`** — the forward stage calls it before the sorted HUD
+  (script-attachment 3D UI). CamAttached draws use their own projection FOV
+  (`device():set_cam_attached_fov`).
+- **Actor legs** — hidden bones are excluded so emissive shaders don't render on them, and legs cast
+  shadows correctly (`SkeletonCustom.cpp`).
 
 ## Threading
 

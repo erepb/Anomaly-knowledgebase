@@ -3,7 +3,7 @@ domain: flows/dltx-config-load
 tags: [engine, config, dltx, ltx, flow, lifecycle]
 sources: [src/xrCore/Xr_ini.cpp, src/xrCore/xr_ini.h]
 related: [engine/xrCore.md, modlayer/config-ltx.md, METHODOLOGY.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-11-13
 ---
 
 # Flow: LTX parse + DLTX merge (config load)
@@ -119,6 +119,8 @@ decide the winner (`SortAndFilterSection` sort) — see "Subtleties".
 
 The parse cache (`CachedData`) is guarded by `xrCriticalSection CacheCS` — relevant because the MT
 build loads resources/configs from multiple threads. Use `InvalidateCache(path)` when files change.
+`InvalidateCache()` with no/empty path clears the whole cache; Lua `reload_system_ini()`
+(`script_ini_file_script.cpp`) now does that (2026.10.11) instead of invalidating only `system.ltx`.
 
 ## Extension points
 

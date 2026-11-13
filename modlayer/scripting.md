@@ -3,7 +3,7 @@ domain: modlayer/scripting
 tags: [modlayer, lua, callbacks, luabind, hot-reload]
 sources: [gamedata/scripts/axr_main.script, gamedata/scripts/callbacks_gameobject.script, gamedata/scripts/aaaa_script_fixes_mp.script, gamedata/scripts/lua_help_ex.script, gamedata/scripts/class_registrator_modded_exes.script, src/xrServerEntities/script_storage.cpp]
 related: [modlayer/_overview.md, modlayer/options-ui.md, modlayer/unlocalizer.md, modlayer/config-ltx.md, engine/server-entities.md, engine/xrGame.md, flows/lua-callback-lifecycle.md, flows/cscript-game-object.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -60,7 +60,22 @@ Two patterns worth recognizing in `callbacks_gameobject.script` beyond plain fan
   unlocalizer exposes base `local`s (`modlayer/unlocalizer.md`).
 
 Recently added engine→bus callbacks: `npc_on_weapon_reload_start`/`_stop`, `npc_on_combat_action_switch`,
-`npc_on_best_cover_repick`.
+`npc_on_best_cover_repick`. Added 2026.09–2026.11: `monster_on_combat_action`
+(`flows/monster-ai-control.md`); `on_before_play_script_sound` / `_ambient_bed` / `_ambient_effect` /
+`_thunderbolt` / `_rain` / `_level_music` (`flows/sound-music.md`); `on_map_location_added` / `_removed`
+(`flows/pda-map-news.md`); `actor_on_missile_throw_force`; `actor_on_device_attach` / `_detach`;
+`actor_on_create_hud_motion_item`, `actor_on_create_legs`; `imgui_on_show` / `_hide`;
+`sid_forester_on_item_take` / `_drop` (Sidorovich/Forester trader binders). The mouse-wheel callback
+also fires on the actor. **Ordering:** `RegisterScriptCallback` takes `before_funcs`, `after_funcs` and a
+Pre/Normal/Post tier (`docs/axr_main.md`, `flows/lua-callback-lifecycle.md`).
+
+**New Lua math/util exports (2026.09–2026.11):** classes `Fobb`, `Fsphere`, `Fcylinder` and `quaternion`
+(slerp, axis-angle, exp/ln, `set_from_mat`); `fbox` intersection/containment helpers; `vector` /
+`matrix` HUD↔world (`hud_to_world`, `world_to_hud`, `cam_to_world`, `custom_to_world`) and mirror/map
+helpers (`script_fvector_script.cpp`, `script_fmatrix_script.cpp`). `ini_file` can drop a whole section
+and read a four-float key (`script_ini_file.cpp`); inventory slot enum, actor zone-influence readings,
+server item condition + visual name, game task type getter, `game.world2ui_many`. LuaJIT profilers:
+`flows/ui-debug-tools.md`; shader bus module: `features/shader-bus.md`.
 
 ## Module lifecycle / hot reload
 

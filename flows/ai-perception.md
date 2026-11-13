@@ -3,7 +3,7 @@ domain: flows/ai-perception
 tags: [engine, cpp, ai, perception, memory, vision, sound, flow]
 sources: [src/xrGame/memory_manager.cpp, src/xrGame/memory_manager.h, src/xrGame/visual_memory_manager.cpp, src/xrGame/visual_memory_manager.h, src/xrGame/sound_memory_manager.cpp, src/xrGame/hit_memory_manager.cpp, src/xrGame/danger_manager.h, src/xrGame/enemy_manager.h, src/xrGame/enemy_manager.cpp, src/xrGame/Actor.cpp, src/xrGame/Actor.h, src/xrGame/CustomMonster.cpp, gamedata/scripts/lua_help_ex.script]
 related: [flows/ai-planner.md, flows/agent-squad-combat.md, flows/damage-hit.md, flows/object-lifecycle.md, flows/cscript-game-object.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -102,6 +102,16 @@ widget into `CActor` (`m_npc_visibility` / `GetVisibility` / `SetVisibilityValue
 the max over observers, smoothed toward the target per frame. Scripts read it as
 `get_actor_visibility()`; `get_actor_ui_luminosity()` remains as a deprecated alias. Previously the
 state lived in `CUIMotionIcon`, so it only existed while that HUD element did.
+
+## Sight-ray fixes (merged 2026.11.09)
+
+- **Dynamic objects occlude again** — `Vision::o_trace` (`xrEngine/Feel_Vision.cpp`) used to pad the
+  target distance by 0.2 m *before* dividing the direction by it, so the ray direction was not unit
+  length; it now normalises by the true distance and casts exactly that far (PRs #818/#828).
+- **Anomaly volumes don't block sight** — `CSpaceRestrictor` marks zone trigger spatials
+  `STYPE_FEELVISIONIGNORE` (`space_restrictor.cpp`, under `SPATIAL_CHANGE`), regardless of
+  `g_ai_die_in_anomaly`; previously NPCs could not see through anomalies, even disabled ones (#825).
+- `CHitMemoryManager` tolerates a null `m_hits` (MT crash guard, `hit_memory_manager.cpp`).
 
 ## Isolation ledger (the seams)
 

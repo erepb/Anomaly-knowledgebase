@@ -1,9 +1,9 @@
 ---
 domain: flows/sound-music
 tags: [modlayer, gameplay, unpacked, lua, sound, music, audio, flow]
-sources: [unpacked/scripts/xrs_dyn_music.script, unpacked/scripts/xr_sound.script, unpacked/scripts/sound_theme.script, unpacked/scripts/sound_manager.script, unpacked/scripts/sound_ambient.script, unpacked/scripts/mob_sound.script, unpacked/scripts/ph_sound.script, unpacked/scripts/xr_zones_sound.script, unpacked/scripts/aaa_sound_object_patch.script, unpacked/scripts/level_weathers.script, unpacked/configs/game_levels_music.ltx]
+sources: [gamedata/scripts/callbacks_gameobject.script, src/xrGame/script_sound.cpp, src/xrGame/GamePersistent.cpp, src/xrGame/level_sounds.cpp, src/xrGame/step_manager.cpp, unpacked/scripts/xrs_dyn_music.script, unpacked/scripts/xr_sound.script, unpacked/scripts/sound_theme.script, unpacked/scripts/sound_manager.script, unpacked/scripts/sound_ambient.script, unpacked/scripts/mob_sound.script, unpacked/scripts/ph_sound.script, unpacked/scripts/xr_zones_sound.script, unpacked/scripts/aaa_sound_object_patch.script, unpacked/scripts/level_weathers.script, unpacked/configs/game_levels_music.ltx]
 related: [INDEX.md, modlayer/gameplay/_overview.md, flows/ui-news-tips.md, flows/options-runtime.md, flows/scheme-engine-core.md, flows/script-npc-actions.md, flows/scheme-sensors-misc.md, flows/monster-schemes.md, flows/anomaly-zones.md, flows/renderer-environment.md, flows/utils-libraries.md, flows/db-registry.md, GLOSSARY.md]
-updated: 2026-06-21
+updated: 2026-11-13
 verified: code
 ---
 
@@ -98,6 +98,29 @@ These are normal logic schemes / per-frame systems that emit sounds:
 - **`xr_zones_sound.script`** — **zone-entry** sounds (`zone_sound` class, `on_enter`).
 - **`mob_sound.script`** — monster sound selection (`pick_sound_from_set`), the audio side of monster
   schemes (`flows/monster-schemes.md`).
+
+## Engine → Lua sound hooks (merged 2026.09.12, dami.sirbu)
+
+Veto/attenuate hooks in the same shape as the older `on_before_play_hud_sound`: the engine calls a
+`_G.COn*` functor, the Lua wrapper in `callbacks_gameobject.script` fires a bus callback with a
+`result = { volume_mult = 1 }` table, and the engine reads `volume_mult` back (0 vetoes, <1 attenuates,
+1 = vanilla). An unset global leaves vanilla.
+
+| bus callback | `_G` functor | engine site |
+|---|---|---|
+| `on_before_play_script_sound` | `COnBeforePlayScriptSound(file, pos, obj)` | `script_sound.cpp` (every `sound_object` play) |
+| `on_before_play_ambient_bed` | `COnAmbientBed(section, file, pos)` | `GamePersistent.cpp` (`WeathersUpdate`) |
+| `on_before_play_ambient_effect` | `COnAmbientEffectSound(file, pos)` | `GamePersistent.cpp` (`WeathersUpdate`) |
+| `on_before_play_thunderbolt` | `COnThunderboltSound(file, distance)` | `CGamePersistent::OnThunderboltSound` (virtual on `IGame_Persistent`, called from xrEngine `thunderbolt.cpp`) |
+| `on_before_play_rain` | `COnRainSound(file)` | `CGamePersistent::OnRainSound`, sampled at rain onset (`Rain.cpp`) |
+| `on_before_play_level_music` | `COnLevelMusic` | `level_sounds.cpp` |
+
+HUD sound callback (`on_before_play_hud_sound`) now also returns `frequency_mult` and `delay_mult`
+(`HudSound.cpp`).
+
+**Distance levers** (2026.10.11): `snd_max_distance_multiplier`, `snd_max_ai_distance_multiplier`
+(`xrSound`, `psSoundMaxDistanceMultiplier`), `step_sound_distance`, `step_particle_distance`
+(`step_manager.cpp`); options page `options_modded_exes_sound_distance.script`.
 
 ## Weather sibling — level_weathers (characterized, not deep-read)
 

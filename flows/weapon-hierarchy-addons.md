@@ -1,9 +1,9 @@
 ---
 domain: flows/weapon-hierarchy-addons
 tags: [xrgame, weapons, addons, scope, silencer, grenade-launcher, ammo, inheritance, flow]
-sources: [src/xrGame/Weapon.h, src/xrGame/Weapon.cpp, src/xrGame/WeaponMagazined.cpp, src/xrGame/WeaponMagazined.h, src/xrGame/WeaponAmmo.cpp, src/xrGame/Scope.cpp, src/xrGame/Silencer.cpp, src/xrGame/GrenadeLauncher.cpp, src/xrGame/WeaponUpgrade.cpp]
+sources: [src/xrGame/Weapon.h, src/xrGame/Weapon.cpp, src/xrGame/WeaponMagazined.cpp, src/xrGame/WeaponMagazined.h, src/xrGame/WeaponAmmo.cpp, src/xrGame/Scope.cpp, src/xrGame/Silencer.cpp, src/xrGame/GrenadeLauncher.cpp, src/xrGame/WeaponUpgrade.cpp, src/xrGame/WeaponSSRS.cpp, src/xrGame/WeaponSSRS.h, src/xrGame/RocketLauncher.cpp, src/xrGame/inventory_item_upgrade.cpp]
 related: [flows/weapon-fire-callbacks.md, flows/weapon-state-machine.md, flows/inventory.md, flows/object-lifecycle.md, flows/items-weapons-outfits-configs.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-11-13
 verified: code
 ---
 
@@ -50,6 +50,14 @@ load/apply/reset family, and `CWeaponAmmo::Load/Get` plus the `CWeapon` magazine
     (second ammo set `m_ammoType2`/`iAmmoElapsed2`/`iMagazineSize2`, `SwitchMode`, GL reload). The
     common rifle base for grenade-capable weapons; `CWeaponAK74` is a pure-config leaf on it.
     *(GL mode + CRocketLauncher mechanics agent-traced.)*
+
+- **`CWeaponSSRS`** (`WeaponSSRS.h`) ← `CRocketLauncher` + `CWeaponMagazined` — magazine-fed grenade
+  launcher; one live rocket object per loaded round. Reworked 2026.10 (PR #713): reload keeps one rocket
+  per round and destroys rockets a reload strips; rounds added outside a reload spawn their rocket;
+  rockets respawn from the loaded ammo type; a shot with no rocket is skipped (a round with no grenade
+  fires as a dud); with `tri_state_reload` it loads one round at a time; NPCs fire at `ai_rpm`
+  (defaults to `rpm`) without changing the weapon's own RPM; grass trace/spread follow the unit fire
+  direction. `CRocketLauncher` marks the detached launched rocket.
 
 **Key takeaway for modding:** leaf classes (`WeaponAK74`, `WeaponSVD`, `WeaponPM`, …) are *config on
 a spine* — they exist mostly to register a luabind class and occasionally override one virtual
@@ -181,8 +189,32 @@ HUD item riding normal animation update (`flows/animation-callbacks.md`).
 - **Addon name must match exactly:** `CanAttach` compares `cNameSect()` to the configured name/list;
   a renamed addon section silently fails to attach (falls through to `inherited::CanAttach`).
 
+## Script weapon controls (merged 2026.11.09, attachments PR series)
+
+`CWeapon` gained per-instance Lua setters so scripted attachments can replace engine addons (full list
+in `lua_help_ex.script`, `class CWeapon`):
+
+- **Zoom** — scope zoom factor / min factor / step count / dynamic zoom / zoom postprocess
+  (`ResetCurrentZoomFactor` re-applies), `StopZoom`, `IsTextureZoomActive`, `IsRotatingToZoom`,
+  `GetEffectiveMinScopeZoomFactor`. Zoom-inertia factor is Lua-settable (`EffectorZoomInertion`).
+- **Shot FX** — `SetFlameParticles`, `SetSmokeParticles`, `SetLightShotDisabled`.
+- **Magazine/ammo** — `SetAmmoMagSize`, `SetAmmoType(index|section)`, `GetAmmoName`,
+  `GetAmmoCount_forType`.
+- **Fire modes** — `GetFireModes()` (Lua table) and `GetFireModeIndex()` (0-based engine index).
+- **HUD** — `UseCustomHudOffset` (`m_bHandleCustomHudOffset`, off by default), HUD rotation stored as
+  quaternions (`m_hud_rotation`/`m_hud_aim_rotation`, `InterpolateHudRotation`), HUD-inertia
+  LRUD offsets / tend-to speeds / min angle getters+setters.
+- **Ownership flags** — `m_bUseEngineAttachments`, `m_bHandleZoomParameters` let a script take over
+  what the engine addon code would otherwise reset.
+- Explosives: `set_initiator(obj)` sets who gets credit for an explosive object.
+- Upgrade icon fields `inv_grid_*` / `upgr_icon_*` are now upgradable (`inventory_item_upgrade.cpp`);
+  `item:get_upgr_icon_rect()`.
+- Dropped items/weapons keep correct position and direction (`inventory_item.cpp`).
+
 ## Deeper
 
+- Script attachments that drive these controls: `features/script-attachments.md`
+- SSRS: `src/xrGame/WeaponSSRS.cpp`
 - Base + predicates + `GetScopeName` + magazine members: `src/xrGame/Weapon.h`, `src/xrGame/Weapon.cpp`
   (`IsScopeAttached`, `IsSilencerAttached`, `IsGrenadeLauncherAttached`, `GetScopeName`,
   `UpdateAddonsVisibility`)

@@ -3,7 +3,7 @@ domain: flows/pda-map-news
 tags: [xrgame, pda, map, map-location, news, contacts, flow]
 sources: [src/xrGame/map_manager.cpp, src/xrGame/map_manager.h, src/xrGame/map_location.cpp, src/xrGame/map_location.h, src/xrGame/map_spot.cpp, src/xrGame/map_spot.h, src/xrGame/ui/UIMap.cpp, src/xrGame/ui/UIMapWnd.cpp, src/xrGame/ui/UIMapWnd.h, src/xrGame/ui/UIPropertiesBox.cpp, src/xrGame/ui/UIPropertiesBox.h, src/xrGame/level_script.cpp, src/xrGame/PDA.cpp, src/xrGame/PDA.h, src/xrGame/game_news.cpp, src/xrGame/actor_communication.cpp, gamedata/scripts/callbacks_gameobject.script, gamedata/scripts/modxml_fix_faction_spot_size.script]
 related: [flows/tasks.md, flows/hud-ui-load.md, flows/relations-info.md, flows/save-load.md, flows/pda-tabs.md, features/pda-tab-scroll.md, modlayer/unlocalizer.md, modlayer/dxml.md, engine/xrGame.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -178,6 +178,27 @@ receive-time), serializable. **`CActor::AddGameNews(news)`** (verified) pushes i
   accessor and friends), not the object-spot calls.
 - **Config:** `map_spots.xml` (spot/pointer/border defs per `spot_type`), the PDA `.ltx` section
   (`radius`, power-saving thresholds, sounds), task config (`map_location`/`map_object_id`).
+
+## Script minimap & map-location callbacks (merged 2026.10.11, TheLostInPlace)
+
+- **Add/remove callbacks** — `on_map_location_added` / `on_map_location_removed` bus callbacks
+  (`_G.COnMapLocationAdded` / `_G.COnMapLocationRemoved`). Removals are queued
+  (`CMapManager::QueueRemovedNotify`) and flushed on the main thread (`FlushRemovedNotify`, called from
+  `Level.cpp`).
+- **Bulk read** — `level.map_get_all_object_spots()` (one row per live location: id, `spot_type`,
+  `current_spot_type`, hint, level, position; `CMapLocation::CurrentSpotType` is virtual so relation
+  locations report their current spot), `level.map_get_spot_declaration(type)` (texture/size from the
+  spot XML, `GetMiniMapSpotPaths`).
+- **`CUIMiniMapWidget`** (`ui/UIMap.h`/`.cpp`) — a script-constructible minimap with its own pooled spots
+  and off-screen pointers, independent of the HUD minimap. Per-type icon/pointer/shader overrides,
+  type filters, per-object tints, pointer target that persists across levels (exit vertex on the
+  graph path to another level, cached in `CMapLocation`). Locations draw onto it via
+  `CMapLocation::UpdateMiniMap`. The world-space pass draws headings and the minimap without the screen
+  aspect. API in `lua_help_ex.script`.
+- Also: `alife():` server objects report where they sit on the level map; `level` gained nearest
+  object by class and texture size queries.
+- **Rankings fix** — PDA rankings skip rows whose NPC id now belongs to a non-stalker
+  (`aaaa_script_fixes_mp.script`).
 
 ## Threading
 

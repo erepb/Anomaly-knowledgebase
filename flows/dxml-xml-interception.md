@@ -1,9 +1,9 @@
 ---
 domain: flows/dxml-xml-interception
 tags: [modlayer, lua, dxml, flow, lifecycle]
-sources: [src/xrXMLParser/xrXMLParser.cpp, src/xrGame/ScriptXMLInit.cpp, gamedata/scripts/dxml_core.script, DXML.md, gamedata/scripts/slaxml.script]
+sources: [src/xrXMLParser/xrXMLParser.cpp, src/xrGame/ScriptXMLInit.cpp, gamedata/scripts/dxml_core.script, docs/DXML.md, gamedata/scripts/slaxml.script]
 related: [modlayer/dxml.md, flows/lua-callback-lifecycle.md, flows/pda-map-news.md, engine/subsystems-misc.md, METHODOLOGY.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 ---
 
 # Flow: DXML XML interception
@@ -11,7 +11,7 @@ updated: 2026-08-17
 How a mod transforms an XML file's contents (UI layouts, dialogs, eng/rus text) before the engine
 consumes it — without overwriting the file. C++ parser hands the raw XML string to Lua, Lua mutates a
 DOM and returns a new string, the C++ parser reloads from it. The `xml_obj` DOM **API itself is in
-`DXML.md`** (authoritative); this file is the runtime flow + digests. Line numbers are
+`docs/DXML.md`** (authoritative); this file is the runtime flow + digests. Line numbers are
 current-as-of-`updated` hints; trust the `file:function` names.
 
 ## Trigger / entry
@@ -23,17 +23,18 @@ the Lua bridge once per file (`xrXMLParser.cpp`).
 
 ### Phase A — Registration (at script load, before any XML is parsed)
 
-1. `dxml_core.script` runs as a module. It saves the base callback API
-   (`RSC = _G.RegisterScriptCallback`) and **monkey-patches** `_G.RegisterScriptCallback`: calls with
-   `name == "on_xml_read"` are appended to a private `xmlCallbacks` list (deduped); all other names
-   fall through to `RSC` (the `_g.script`→`axr_main` bus, see `flows/lua-callback-lifecycle.md`).
-2. `dxml_core` `AddScriptCallback("on_xml_read")` (+ `on_specific_character_dialog_list`,
+1. `dxml_core.script` runs as a module and declares `AddScriptCallback("on_xml_read")` on the normal
+   `axr_main` bus. **Since 2026.10.11 there is no private handler list**: the old
+   `RegisterScriptCallback` monkey-patch, `xmlCallbacks` and `xmlDispatch` were removed, so
+   `on_xml_read` handlers are ordinary bus subscribers and accept the `before_funcs` / `after_funcs` /
+   Pre-Normal-Post ordering arguments (`flows/lua-callback-lifecycle.md`).
+2. `dxml_core` also declares (+ `on_specific_character_dialog_list`,
    `on_specific_character_init`).
 3. **modxml gather** (the `do … end` block): `dxml_core` enumerates `$game_scripts$` **root**
    `modxml_*.script`, `table_sort`s them (alphabetical → deterministic order, unlike the FS-ordered
    `axr_main` bootstrap), and calls each module's `module.on_xml_read()` *init* function. Inside that
    init, modules call `RegisterScriptCallback("on_xml_read", handler)` to append their real per-file
-   `handler(xml_file_name, xml_obj, flags)` to `xmlCallbacks`. Then it force-loads
+   `handler(xml_file_name, xml_obj, flags)` on the bus. Then it force-loads
    `ui_options_modded_exes.on_xml_read()`.
 
 ### Phase B — Per-file interception (every XML load)
@@ -50,7 +51,8 @@ the Lua bridge once per file (`xrXMLParser.cpp`).
      original.
    - Wrap in `xml_obj = xml_object(file, xml_string, xml_table)` (the DOM mods manipulate).
    - `flags = { cache = false }`.
-   - **`xmlDispatch(file, xml_obj, flags)`** — fire every handler in `xmlCallbacks` in order.
+   - **`SendScriptCallback("on_xml_read", file, xml_obj, flags)`** — fire every bus handler in bus
+     order.
    - Serialize back: `xml_string = parser:simple_xml(xml_table)`.
    - If a handler set `flags.cache = true`, store result in `xml_string_cache[file]`.
    - Return the new string.
@@ -75,25 +77,20 @@ the Lua bridge once per file (`xrXMLParser.cpp`).
   above (skip/cache/parse/dispatch/serialize). *Reads/Writes:* `xml_string_cache`. *Returns:* XML
   string (modified or original). *Gotcha:* returns original on any parse error — failures degrade,
   don't crash.
-- **`dxml_core.script:xmlDispatch(file, xml_obj, flags)`** — *Does:* `ipairs` over
-  `xmlCallbacks`, calling each `handler(file, xml_obj, flags)`. *Reads:* `xmlCallbacks`.
-- **`dxml_core.script:RegisterScriptCallback` override** — *Does:* route `on_xml_read`
-  registrations into `xmlCallbacks` (dedup); delegate everything else to base `RSC`. *Writes:*
-  `xmlCallbacks`.
 - **`dxml_core.script` modxml gather block** — *Does:* find+sort `modxml_*.script`
   root files, call each `on_xml_read()` init; force-load `ui_options_modded_exes`. *Gotcha:*
   `table_sort` → deterministic init order; the `on_xml_read()` here is the module *init*, distinct
   from the per-file *handler* it registers.
 - **`dxml_core.script:openXMLFile(file)`** — *Does:* load a config XML off
-  `$game_config$`, parse, apply DXML edits via `xmlDispatch`, return the `xml_obj` (for editing files
+  `$game_config$`, parse, apply DXML edits via `SendScriptCallback("on_xml_read", …)`, return the `xml_obj` (for editing files
   outside the callback path).
 - **`dxml_core.script:CSpecificCharacterDialogList/Init`** — *Does:* engine-invoked
   hooks for character-desc data; fire the corresponding bus callbacks and return the mutated arg.
 
 ## State touched
 
-- `dxml_core` locals: `xmlCallbacks` (handler list), `xml_string_cache` (per-file result cache),
-  the saved `RSC`/`URSC` originals.
+- `dxml_core` locals: `xml_string_cache` (per-file result cache). Handlers live in
+  `axr_main.intercepts["on_xml_read"]`.
 - Engine: `CXml m_xml` DOM (reloaded from the Lua-returned string).
 
 ## Threading
@@ -105,18 +102,19 @@ locking; relies on Lua running single-threaded for these calls.
 
 Write `gamedata/scripts/modxml_<name>.script` exposing `function on_xml_read()` that calls
 `RegisterScriptCallback("on_xml_read", function(file, xml_obj, flags) … end)`. Match `file` to the
-target path, mutate `xml_obj` (API in `DXML.md`), optionally set `flags.cache = true` for static
+target path, mutate `xml_obj` (API in `docs/DXML.md`), optionally set `flags.cache = true` for static
 results. See `modlayer/dxml.md` and example `modxml_*.script` files.
 
 ## Failure & edge cases
 
 - **Non-eng/rus `text\` files and `character_desc_general.xml` are never processed** by `COnXmlRead`
-  (use the `CSpecificCharacter*` hooks / DXML.md "Additional functions" for character data).
+  (use the `CSpecificCharacter*` hooks / docs/DXML.md "Additional functions" for character data).
 - **Parse errors return the original string** — a malformed edit silently no-ops rather than
   crashing; check the DXML parser log lines.
 - **`flags.cache = true` freezes a file** — subsequent loads return the cached string and **skip all
   callbacks**; don't cache files other mods may also edit.
-- The `on_xml_read` name is invisible in `axr_main.intercepts` (it lives in `xmlCallbacks`).
+- `on_xml_read` handlers are in `axr_main.intercepts` and run in bus order (registration order unless
+  ordering constraints/tiers are given).
 
 ## The `parent` invariant (mutation correctness, 2026-08 fixes)
 
@@ -157,14 +155,13 @@ again (and a parse error means the whole file silently keeps its original conten
 
 - Engine bridge: `src/xrXMLParser/xrXMLParser.cpp` (call site), `src/xrGame/ScriptXMLInit.cpp`
   (`XMLLuaCallback`)
-- Lua core: `gamedata/scripts/dxml_core.script` (`COnXmlRead`, `xmlDispatch`, RSC override, gather
-  block, `xml_object`), `gamedata/scripts/slaxml.script` (parser)
-- `xml_obj` API + examples: `DXML.md`
+- Lua core: `gamedata/scripts/dxml_core.script` (`COnXmlRead`, gather block, `xml_object`), `gamedata/scripts/slaxml.script` (parser)
+- `xml_obj` API + examples: `docs/DXML.md`
 - Registration mechanics: `flows/lua-callback-lifecycle.md`
 
 ## Maintenance
 
 - Re-grep anchors if lines drift: `XMLLuaCallback` (ScriptXMLInit.cpp), `_G.COnXmlRead` /
-  `function xmlDispatch` (dxml_core.script).
+  `SendScriptCallback("on_xml_read"` (dxml_core.script).
 - If the engine adds more `_G.C*` XML hooks (like the character ones), add them to Phase C.
-- Keep the `xml_obj` API out of here — it lives in `DXML.md`.
+- Keep the `xml_obj` API out of here — it lives in `docs/DXML.md`.

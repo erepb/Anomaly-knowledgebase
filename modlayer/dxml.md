@@ -1,7 +1,7 @@
 ---
 domain: modlayer/dxml
 tags: [modlayer, lua, dxml]
-sources: [DXML.md, gamedata/scripts/dxml_core.script, gamedata/scripts/modxml_test.script, gamedata/scripts/modxml_fix_faction_spot_size.script, gamedata/scripts/slaxml.script]
+sources: [docs/DXML.md, gamedata/scripts/dxml_core.script, gamedata/scripts/modxml_test.script, gamedata/scripts/modxml_fix_faction_spot_size.script, gamedata/scripts/slaxml.script]
 related: [modlayer/_overview.md, modlayer/scripting.md, flows/dxml-xml-interception.md, flows/pda-map-news.md, engine/subsystems-misc.md, GLOSSARY.md]
 updated: 2026-08-17
 ---
@@ -9,7 +9,7 @@ updated: 2026-08-17
 # DXML — XML manipulation from Lua
 
 Lets mods transform XML files (UI layouts, dialogs, some text) before the engine parses them, without
-overwriting whole XML files. By demonized. **Full guide: `DXML.md` (repo root) — read it for the API
+overwriting whole XML files. By demonized. **Full guide: `docs/DXML.md` — read it for the API
 and worked examples.** This file is the condensed map.
 
 > Full runtime sequence (engine bridge → `COnXmlRead` → dispatch → reload) with function digests:
@@ -32,7 +32,7 @@ Create `gamedata/scripts/modxml_<yourname>.script` (the `modxml_` prefix is requ
 See `modxml_test.script`, `modxml_inject_keybinds.script`, `modxml_lua_fatal_window.script` for live
 examples.
 
-## xml_obj API (see DXML.md for signatures)
+## xml_obj API (see docs/DXML.md for signatures)
 
 `query`, `getText`, `setText`, `setElementAttr`, `add`, `insertFromXMLString`, `insertFromXMLFile`
 (`GLOSSARY.md#xml_obj`).
@@ -40,8 +40,8 @@ examples.
 ## Limits
 
 DXML does NOT process translation strings outside `eng/`/`rus/` folders and
-`gameplay\character_desc_general.xml` (per DXML.md "Additional functions"). For those, use the
-dedicated functions described in DXML.md.
+`gameplay\character_desc_general.xml` (per docs/DXML.md "Additional functions"). For those, use the
+dedicated functions described in docs/DXML.md.
 
 Malformed XML (including an unbalanced closing tag) is a **parse error** — leniency for that was added
 and then reverted in 2026-08 because it broke mods — and a parse error makes `COnXmlRead` return the
@@ -59,7 +59,7 @@ the tree. Mechanism detail: `flows/dxml-xml-interception.md`.
 
 ## Deeper
 
-- API + examples (authoritative): `DXML.md`
+- API + examples (authoritative): `docs/DXML.md`
 - Core/runtime: `gamedata/scripts/dxml_core.script`, `gamedata/scripts/slaxml.script`
 - Example patchers: `gamedata/scripts/modxml_*.script`
 - Engine interception/consumers: `src/xrXMLParser/xrXMLParser.cpp`,
@@ -67,6 +67,6 @@ the tree. Mechanism detail: `flows/dxml-xml-interception.md`.
 
 ## Maintenance
 
-- Don't duplicate `DXML.md` here — if the API changes, update `DXML.md` and just refresh the method
+- Don't duplicate `docs/DXML.md` here — if the API changes, update `docs/DXML.md` and just refresh the method
   list / pointers in this file.
 - If the engine interception point moves, sync with `engine/subsystems-misc.md`.

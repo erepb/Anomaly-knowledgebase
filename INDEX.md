@@ -3,23 +3,23 @@ domain: meta
 tags: [meta, engine, modlayer]
 sources: [claudedocs/kb/, src/, gamedata/, README.md]
 related: [GLOSSARY.md, CONVENTIONS.md]
-updated: 2026-08-17
-synced: 2026-08-17
+updated: 2026-11-13
+synced: 2026-11-13
 synced_branch: all-in-one-vs2022-wpo-mt
-synced_commit: becde89ee
+synced_commit: 3470feeb2
 ---
 
 # Knowledge Base — Index
 
-> # 🔄 KB SYNCED TO: **2026-08-17** — `all-in-one-vs2022-wpo-mt` @ `becde89ee`
+> # 🔄 KB SYNCED TO: **2026-11-13** — `all-in-one-vs2022-wpo-mt` @ `3470feeb2`
 >
 > **Everything in the repo up to that commit is reflected here. Anything newer is not.**
 >
-> **To sync again:** `git log --no-merges becde89ee..HEAD` (cross-check `README.md` "Changelog"),
+> **To sync again:** `git log --no-merges 3470feeb2..HEAD` (cross-check `README.md` "Changelog"),
 > reconcile the affected KB files, then update the three `synced*` fields above, add an entry to the
 > [Sync log](#sync-log), and bump `updated:`. Full procedure: `CONVENTIONS.md` → "Repo sync protocol".
 >
-> Sync history: 2026-08-17 @ `becde89ee` ← 2026-06-26 @ `d7c39ae2` (KB creation: 2026-06-04/05 audit).
+> Sync history: 2026-11-13 @ `3470feeb2` ← 2026-08-17 @ `becde89ee` ← 2026-06-26 @ `d7c39ae2` (KB creation: 2026-06-04/05 audit).
 
 > ✅ **AUDIT COMPLETE (2026-06-04; deep second pass 2026-06-05) — no `partial` files; `engine/xrGame.md` is a verified `map` by design.**
 > **Flow buildout (2026-06-05): all 20 flows now documented (F1–F20) — Phases 1–4 of `ROADMAP.md`
@@ -158,11 +158,12 @@ unless you're actually on that branch (`git branch --show-current`).
 
 ### flows/ — L2 flows & L3 function digests (how things run)
 - `flows/lua-callback-lifecycle.md` — engine Lua boot → module bootstrap → callback bus →
-  dispatch (+ DXML divert). Flagship/template. tags: lua, callbacks, flow, lifecycle
+  dispatch, incl. Pre/Normal/Post tiers + before/after ordering (`on_xml_read` is an ordinary bus
+  callback since 2026.10.11). Flagship/template. tags: lua, callbacks, flow, lifecycle
 - `flows/dltx-config-load.md` — LTX parse + DLTX mod-file discovery/merge (operators, depth
   precedence, fatals). tags: config, dltx, ltx, flow
 - `flows/dxml-xml-interception.md` — engine XML → `COnXmlRead` → `xml_obj` mutate → reload; modxml
-  registration + character hooks. tags: dxml, lua, flow
+  registration + character hooks; API guide is `docs/DXML.md`. tags: dxml, lua, flow
 - `flows/weapon-fire-callbacks.md` — FireStart→state_Fire→OnShot→FireBullet→bullet→hit; per-object
   weapon callbacks + misfire/jam. tags: weapons, actor, callbacks, flow
 - `flows/object-lifecycle.md` — **backbone**: CGameObject spawn→per-frame (UpdateCL RT vs
@@ -695,6 +696,15 @@ unless you're actually on that branch (`git branch --show-current`).
   overflow handling (slack squeeze, then scroll with spliced/skin arrows) + per-tab icons; per-tab
   geometry, convex hit clips, two-pass clipped draw. **Merged to mainline** (was `feat/tabs*`).
   tags: ui, pda, tabs, scripting, cpp, lua
+- `features/spawn-overlays.md` — load-time `all.spawn` assembly: `spawn_overlays.ltx` (graph links/
+  unlinks, spawn remove/patch/replace, path remove, level cut), SDK `level.spawn`/`level.game`
+  fragments, level packs (extra `.spawn` files), legacy-save id translation, v13 large AI maps,
+  `nearest_vertex`/`create_on_level`. tags: alife, spawns, graph, ltx, dltx, level-pack
+- `features/script-attachments.md` — `script_attachment` (HUD/world/camera models with bones, physics,
+  light, 3D UI, shaders), `CUI3dStatic` 3D icons + DX11 atlas, first-person hand poses / arm IK /
+  motion-mark timing. tags: lua, animation, weapons, ui, physics, renderer
+- `features/shader-bus.md` — named `bus_<id>` shader lanes written from Lua (`shader_bus.*`), engine/
+  cvar/object lanes, console + ImGui monitor; guide `docs/shader_bus.md`. tags: renderer, shaders, lua
 
 ## Quick routing
 
@@ -734,6 +744,11 @@ unless you're actually on that branch (`git branch --show-current`).
 | NPC senses / vision / memory / enemy selection | `flows/ai-perception.md` |
 | smart_terrain jobs / xr_logic schemes / NPC binder | `flows/ai-squad-logic.md` |
 | Rendering, shaders, a visual bug, SPOM | `engine/renderer.md` → `features/spom.md` |
+| Passing values from Lua to a shader (`bus_*`, replacing `shader_param_N`) | `features/shader-bus.md` |
+| Scripted weapon/HUD/world attachments, 3D UI icons, first-person IK / hand poses | `features/script-attachments.md` |
+| Monster Lua combat seam (`monster_on_combat_action`, `set_monster_*`, `try_monster_*`) | `flows/monster-ai-control.md` |
+| Veto/attenuate script, ambient, thunder, rain or music sounds from Lua | `flows/sound-music.md` |
+| RenderDoc captures / LuaJIT CPU or allocation profiling | `flows/ui-debug-tools.md` |
 | How a shader/material loads, texture/constant dedup, getShaderPath | `flows/renderer-resources-shaders.md` |
 | What gets drawn each frame / render queue / culling order / shadow queues | `flows/renderer-scene-graph.md` |
 | Post FX chain, SSAO/bloom/DOF/SMAA/SSR, SSFX toggles, phase_combine order | `flows/renderer-post-process.md` |
@@ -846,6 +861,7 @@ unless you're actually on that branch (`git branch --show-current`).
 | Where a weapon's damage/recoil/ammo/scope/jam params are / how to add a new gun-outfit-item without conflicts (the `w_*`/`o_*`/`items_*` glob auto-include) / weapon variant & scope-attach-state subsections / where outfit protection & immunities are configured / ammo `k_*` ballistic coeffs / per-item upgrade trees / why editing shipped `w_*` files is discouraged | `flows/items-weapons-outfits-configs.md` |
 | Where a smart-terrain's NPC jobs / an object's logic (door/sleep/teleport/box) is configured / the `[logic@job]` gulag job catalog with `prior`/`suitable` / smart respawn & spawn_squads defs / why a logic file does nothing (custom_data pointer) / `smart/<smart>.ltx` vs `*_smart_logic.ltx` / how to edit campfire stories | `flows/per-smart-logic-configs.md` |
 | Where the shared base/parent sections are (`defines.ltx`: hud_base/booster/default_weapon_params/monster_base) / video & difficulty & warfare presets / why `axr_options.ltx` is empty / where a plugin's or ai_tweak's numbers live (achievements/difficulty/combat_ignore/simulation_objects/guaranteed_drops/…) vs which flow owns the behavior / the constants-vs-content distinction | `flows/plugins-tweaks-presets-configs.md` |
+| Adding levels / linking levels / removing, patching or adding spawned objects or patrol paths without the SDK / level packs / v13 AI maps / spawning by level name | `features/spawn-overlays.md` |
 | Where the world's objects are placed (`all.spawn` binary) / how to edit spawns & why save doesn't change / ALife simulator tuning (`alife.ltx`: time_factor/switch_distance/schedule) / the game-graph point catalog / story-IDs (finding a specific placed object) / the level & world-map registry / why `patrol_paths.ltx` is empty (paths live in all.spawn) | `flows/spawns-alife-graphs-configs.md` |
 | The config/data tier overview (creatures/zones/items/logic/plugins/spawns LTX, the DLTX patch model) | `modlayer/gameplay/configs-data.md` |
 | The gamemodes & services family (overview: flags + difficulty + setup + modes + services) | `modlayer/gameplay/gamemodes-services.md` |
@@ -857,6 +873,63 @@ unless you're actually on that branch (`git branch --show-current`).
 One entry per repo→KB sync, newest first. The banner at the top of this file is the authoritative
 "synced to" marker; this log is what each sync actually changed. Where an entry here and a row in the
 older "Audit status" table disagree about what was verified, **the newer entry wins**.
+
+### 2026-11-13 — `becde89ee` → `3470feeb2` (branch `all-in-one-vs2022-wpo-mt`)
+
+308 non-merge commits walked (`git log --no-merges becde89ee..HEAD`), cross-checked against the
+`README.md` changelog entries 2026.09.12, 2026.10.11 and 2026.11.09 (prerelease). Each cluster was
+reconciled against code or diffs read this session.
+
+**New files:** `features/spawn-overlays.md` (spawn overlays, level packs, fragments, level cut, legacy
+saves, v13 AI maps), `features/script-attachments.md` (attachments, 3D icons/atlas, arm IK, hand poses),
+`features/shader-bus.md`. GLOSSARY: `spawn-overlay`, `shader-bus`, `script-attachment`,
+`callback-tier`.
+
+Reconciled (each `updated: 2026-11-13`):
+
+- **Callbacks** — `flows/lua-callback-lifecycle.md` (`callback_set` ordering: before/after + Pre/Normal/
+  Post tiers, transactional reorder; **`on_xml_read` is now an ordinary bus callback**, the
+  `dxml_core` monkey-patch / `xmlCallbacks` / `xmlDispatch` are gone), `flows/dxml-xml-interception.md`
+  (same), `modlayer/scripting.md` (new bus callbacks + Lua math/ini exports).
+- **AI** — `flows/monster-ai-control.md` (Lua combat seam: `_G.CMonsterCombatAction` consumed by every
+  species state manager, readers/setters/maneuvers, `set_monster_dest`), `flows/ai-perception.md`
+  (`Vision::o_trace` ray fix, anomaly spatials `STYPE_FEELVISIONIGNORE`, hit-memory null guard),
+  `flows/stalker-execution.md` (`set_movement_hold`, `npc_dont_drop_weapons_on_death`,
+  `npc_relaxed_idle_mode`, smart-cover reload speed cap, throw-force hooks).
+- **ALife** — `flows/alife-online-offline.md` (online squad member location sync, ixray squad
+  teleport port, deferred spawn children, `CCustomMonster::net_Relevant`),
+  `flows/spawns-alife-graphs-configs.md` (banner + stale "not patchable"/"stub" claims corrected).
+- **Weapons/physics** — `flows/weapon-hierarchy-addons.md` (`CWeaponSSRS` rework, script weapon
+  controls), `flows/physics-objects-ragdoll.md` (frozen shells, vector scale), `flows/anomaly-zones.md`
+  (gravi-zone exit fix), `flows/camera-pp-effectors.md` (cam effector speed, PP queries, CamAttached FOV,
+  damage stagger factor).
+- **UI/PDA** — `flows/hud-ui-load.md` (global mouse-capture stack, hide lock, clip rects, `FindChild` +
+  casts, `SetLineTo`, `ShowAt`, custom-statics lock, Shniaga modal pass), `flows/pda-map-news.md`
+  (map-location callbacks, bulk spot read, `CUIMiniMapWidget`).
+- **Sound/environment** — `flows/sound-music.md` (six veto/volume hooks, distance cvars),
+  `flows/renderer-environment.md` (env mods from LTX, frame-rate independent wetness,
+  `set_rain_wetness`, thunderbolt pause fix).
+- **Renderer** — `flows/renderer-scene-graph.md` (R4 full-detail distance, `mapLOD` clear, legs fix,
+  forward-stage attachment UI), `flows/renderer-resources-shaders.md` (texture `.ltx` descriptors,
+  `.seq` dedup, constants typing, frame count in `ssfx_timedelta.y`).
+- **Engine/MT/debug** — `engine/engine-core.md` (`thread_spawn_ex`, particle/bullet locks, CFORM
+  `build_arrays`/`build_tree`, FS + luabind hardening), `flows/engine-boot-frame.md` (`seqFrameMT`
+  before parallel GC, splash/alt-tab/loading-art fixes), `flows/ui-debug-tools.md` (RenderDoc, LuaJIT
+  profilers, `dump_cvar_enable`, ImGui show/hide).
+- **Config/misc** — `modlayer/config-ltx.md` (root `mod_*.ltx` list), `flows/dltx-config-load.md`
+  (`reload_system_ini` clears the whole cache), `flows/tasks.md` (escort fixes),
+  `flows/trade-economy.md` (antifreeze drop events, Sidorovich/Forester callbacks). `DXML.md` moved to
+  `docs/DXML.md`: all KB references repointed.
+
+Deliberately left open:
+
+- `src/.clang-format` / `.editorconfig` / "formatter changes" (repo-wide formatting) are not documented.
+- Not traced: the 1819-line `script_attachment_manager.cpp` body beyond its header and Lua surface;
+  `CUIMiniMapWidget` internals beyond its API; `spawn_packs.cpp` substitution/drift heuristics beyond
+  the header contract.
+- `vis_data::skip_marker` is set by attachments but no renderer reader was found. Recheck next sync.
+- Verdatim's additive-animation PR was reverted (`b86d733f4`); nothing documented for it.
+- Pre-existing `related:` failures listed in `CONVENTIONS.md` are unchanged.
 
 ### 2026-08-17 — `d7c39ae2` → `becde89ee` (branch `all-in-one-vs2022-wpo-mt`)
 

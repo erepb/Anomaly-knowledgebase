@@ -3,7 +3,7 @@ domain: flows/engine-boot-frame
 tags: [engine, cpp, boot, frame, device, scheduler, threading, flow]
 sources: [src/xrEngine/x_ray.cpp, src/xrEngine/EngineAPI.cpp, src/xrEngine/device.cpp, src/xrEngine/device.h, src/xrEngine/EngineThreading.cpp, src/xrEngine/pure.h]
 related: [flows/object-lifecycle.md, flows/render-frame.md, engine/engine-core.md, engine/_overview.md, GLOSSARY.md]
-updated: 2026-06-05
+updated: 2026-11-13
 verified: code
 ---
 
@@ -56,7 +56,9 @@ personally re-read)*.
    - **Secondary tasks** (`EngineThreading.cpp`) — `PreRenderThread` (rain/particles),
      `CalculateBonesThread` (skinned-bone calc from the saved frustum), and **`GameThread`** which
      runs the **scheduler** (`Engine.Sheduler.UpdateDeferred`/`Update` — the time-budgeted **serial**
-     dispatch, `engine/engine-core.md`), `seqParallel`, parallel Lua GC, and `seqFrameMT`.
+     dispatch, `engine/engine-core.md`), `seqParallel`, `seqFrameMT`, then parallel Lua GC.
+     **Order matters (2026.11.10):** `seqFrameMT` runs *before* the parallel GC because physics contact
+     callbacks inside it can enter Lua; running GC first leaked Lua objects (attachment mod).
    - **Render** — `Begin` (device-state check) → set view/projection (save matrices for next frame's
      bone calc) → **`seqRender.Process(rp_Render)`** (all `pureRender` subscribers: game/HUD/stats) →
      `End` (present; precache countdown; gamma).
@@ -91,6 +93,11 @@ bone calc, and the game scheduler/`seqFrameMT` each frame. The serial scheduler 
 
 ## Failure & edge cases
 
+- **Boot/load fixes (2026-09 → 2026-11):** `-nosplashwindow` sizes the splash window to zero
+  (`x_ray.cpp`); `dump_cvar_enable` (default on) gates the cvar dump at start/crash; an alt-tab during
+  loading no longer issues an unbalanced `Device.Pause` (missing sounds); on a zone transition the
+  destination's loading artwork is chosen before the reload begins (opt-in `g_loading_screen_early`,
+  also a Modded Exes option; `x_ray.cpp`, hinted from `alife_update_manager.cpp`).
 - **`fTimeDelta` is smoothed and clamped** (and zero when paused) — game logic that reads it gets a
   filtered dt, not the raw frame time; a stall doesn't produce a huge dt.
 - **Loading frames short-circuit `on_idle`** (run load events + draw, return) — normal frame steps

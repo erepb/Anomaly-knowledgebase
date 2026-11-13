@@ -3,7 +3,7 @@ domain: engine/core
 tags: [engine, cpp, scheduler, imgui]
 sources: [src/xrEngine/device.cpp, src/xrEngine/XR_IOConsole.h, src/xrEngine/XR_IOConsole_callback.cpp, src/xrEngine/line_edit_control.h, src/xrEngine/line_edit_control.cpp, src/xrEngine/IInputReceiver.h, src/xrEngine/xr_input.h, src/xrEngine/xrSheduler.h, src/xrEngine/xrSheduler.cpp]
 related: [engine/_overview.md, engine/renderer.md, modlayer/scripting.md, flows/engine-boot-frame.md, flows/lua-callback-lifecycle.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -56,6 +56,26 @@ with a time-budget check every 8th item. The SRW lock makes *registration* threa
 it does **not** parallelize execution — there is no worker-thread dispatch of the deferred batch
 (corrects an earlier README-based "MT threads the batch" claim). Driven per frame via `device.cpp`
 `seqFrame.Process`. See `GLOSSARY.md#scheduler`.
+
+## MT safety fixes merged 2026-09 → 2026-11
+
+- **Threads** — `thread_spawn_ex` (`xrCore/_math.h`) returns a joinable `_beginthreadex` handle the
+  caller must `CloseHandle`; new code uses it instead of fire-and-forget `thread_spawn`.
+- **Particles → main thread** — `seqParallelBeforRender` is filled from the particle worker
+  (`CParticleGroup::SItem::OnFrame`) and drained in `CRenderDevice::on_idle`, guarded by
+  `Device.seqParallelBeforRenderCS`; pending particle callbacks are cancelled in place instead of
+  erased (`xr_object_list.cpp`). Bullet manager access is synchronized too
+  (`Level_Bullet_Manager.cpp`).
+- **CFORM** — `CDB::MODEL::build_arrays` publishes verts/tris before the async `build_tree`
+  (`status` 0 ready / 1 init / 2 building), so readers of the arrays don't wait on the tree
+  (`xrCDB.h`, `xr_area.cpp`).
+- **FS** — the open-file-tracking lock is shared across calls (`LocatorAPI.cpp`);
+  `FS_file_list` tolerates a NULL list (`fs_registrator_script.cpp`).
+- **Lua/luabind** — too few arguments raise a Lua error instead of reading past the overload table
+  (`class_rep.cpp`, `function.cpp`); `object_cast_nothrow` checks the type in release builds;
+  `CScriptStorage::object` does a direct lookup (`script_storage.cpp`); `device()` is cached on the
+  Lua side (`_g_patches.script`); `get_resolutions` no longer returns a freed string.
+- **Frame order** — `seqFrameMT` before parallel Lua GC (`flows/engine-boot-frame.md`).
 
 ## Deeper
 

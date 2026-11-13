@@ -1,9 +1,9 @@
 ---
 domain: flows/ui-debug-tools
 tags: [modlayer, gameplay, unpacked, gamedata, lua, ui, debug, hud, dev-tools, flow]
-sources: [unpacked/scripts/ui_debug_launcher.script, unpacked/scripts/ui_debug_main.script, unpacked/scripts/xrs_debug_tools.script, unpacked/scripts/debug_cmd_list.script, unpacked/scripts/ui_debug_item.script, unpacked/scripts/ui_debug_weather.script, unpacked/scripts/ui_debug_lighting.script, unpacked/scripts/ui_debug_wpn_hud.script, unpacked/scripts/_g.script, gamedata/scripts/zz_ui_debug_inputs.script, gamedata/scripts/imgui_lua_debug.script, gamedata/scripts/options_modded_exes_debug.script]
+sources: [src/xrEngine/renderdoc_integration.cpp, src/xrEngine/xr_ioc_cmd.cpp, src/3rd party/luajit-2/src/lj_profile.c, src/3rd party/luajit-2/src/lj_allocprof.c, gamedata/scripts/imgui_shader_bus.script, unpacked/scripts/ui_debug_launcher.script, unpacked/scripts/ui_debug_main.script, unpacked/scripts/xrs_debug_tools.script, unpacked/scripts/debug_cmd_list.script, unpacked/scripts/ui_debug_item.script, unpacked/scripts/ui_debug_weather.script, unpacked/scripts/ui_debug_lighting.script, unpacked/scripts/ui_debug_wpn_hud.script, unpacked/scripts/_g.script, gamedata/scripts/zz_ui_debug_inputs.script, gamedata/scripts/imgui_lua_debug.script, gamedata/scripts/options_modded_exes_debug.script]
 related: [INDEX.md, modlayer/gameplay/ui-scripts.md, flows/gameplay-ui-screens.md, flows/pda-tabs.md, flows/hud-ui-load.md, flows/gameplay-boot.md, flows/ai-squad-logic.md, flows/options-runtime.md, modlayer/gameplay/_overview.md, GLOSSARY.md]
-updated: 2026-06-12
+updated: 2026-11-13
 verified: code
 ---
 
@@ -144,6 +144,26 @@ Three files in `gamedata/scripts/` change the picture at runtime (per the `gamed
   `options_modded_exes_logging` / `_errors` pages). This is the F17 options domain
   (`flows/options-runtime.md`), surfaced here only because it is the settings home for the debug flags
   (`other/debug_hud`, `other/debug_error`) that gate this subsystem.
+
+## Engine-side debug & profiling tools (merged 2026.09–2026.11)
+
+Not gated by `DEV_DEBUG`; these are engine features.
+
+- **RenderDoc integration** (`xrEngine/renderdoc_integration.cpp`) — active when `renderdoc.dll` is
+  injected or the game runs with `-renderdoc`. Console `rdoc_capture [frames 1..60]`, `rdoc_open`,
+  `rdoc_overlay` (`xr_ioc_cmd.cpp`, `CCC_RenderDoc*`). Captures are annotated with engine state
+  (`renderdoc_annotate_frame`); render targets carry debug names (`dx10DebugName.h`); R4 frame markers
+  are coloured and skipped when nothing listens (`dx10EventWrapper.cpp`).
+- **LuaJIT profilers** (`src/3rd party/luajit-2/src/lj_profile.c`, `lj_allocprof.c`, `lib_jit.c`) —
+  `jit.profile` (backported 2.1 timer sampler, jittered interval), `jit.allocprof` (byte-sampled
+  allocation attribution, optional stacks), `jit.util.gcstat` (GC totals + completed cycles). Mutually
+  exclusive; a profile callback error no longer kills the game. API in `lua_help_ex.script`.
+- **Shader bus monitor** — ImGui Debug > Shader bus (`imgui_shader_bus.script`; see
+  `features/shader-bus.md`).
+- **ImGui visibility callbacks** — `imgui_on_show` / `imgui_on_hide` (`callbacks_gameobject.script`).
+- **`dump_cvar_enable`** (default on) — gates the cvar dump at start and on crash (`x_ray.cpp`,
+  `XR_IOConsole.cpp`).
+- **Sound event profiling** — sound events carry profiler zones (`PROF_EVENT`).
 
 ## Isolation ledger (the seams)
 

@@ -3,7 +3,7 @@ domain: flows/renderer-resources-shaders
 tags: [engine, renderer, shaders, r4, dx11, blender, mt, flow]
 sources: [src/Layers/xrRender/ResourceManager.cpp, src/Layers/xrRender/ResourceManager.h, src/Layers/xrRender/ResourceManager_Loader.cpp, src/Layers/xrRender/ResourceManager_Resources.cpp, src/Layers/xrRender/ResourceManager_Reset.cpp, src/Layers/xrRender/ResourceManager_Scripting.cpp, src/Layers/xrRender/Shader.cpp, src/Layers/xrRender/Shader.h, src/Layers/xrRender/ShaderResourceTraits.h, src/Layers/xrRender/SH_Texture.h, src/Layers/xrRender/xrRender_console.cpp, src/Layers/xrRenderDX10/dx10ResourceManager_Resources.cpp, src/Layers/xrRenderDX10/dx10SH_Texture.cpp, src/Layers/xrRenderPC_R4/r4_R_render.cpp]
 related: [engine/renderer.md, flows/render-frame.md, flows/renderer-blender-compile.md, flows/renderer-backend.md, flows/renderer-scene-graph.md, flows/options-runtime.md, modlayer/assets.md, GLOSSARY.md]
-updated: 2026-08-17
+updated: 2026-11-13
 verified: code
 ---
 
@@ -138,6 +138,24 @@ eligible.
   (`r3\` for R3+R4 — see `engine/renderer.md`).
 - **Config:** `RImplementation.o.ssfx_core` + `::Render->hud_loading` gate the HUD-element compile
   variant; `g_dedicated_server` skips shader creation entirely.
+
+## Changes merged 2026-09 → 2026-11
+
+- **Texture descriptors from `.ltx`** (PR #730) — `CTextureDescrMngr::LoadLTX` runs after `LoadTHM`
+  for `$game_textures$` and `$level$`: a `<texture>.ltx` with a `[texture]` section (`bump_mode` =
+  none/use/parallax, optional `bump_name` (default `<name>_bump`), `material`) describes a texture
+  **only if no `.thm` already did**. The parallel THM loader threads were first fixed (real join +
+  lock) and then removed; loading is sequential again.
+- **`.seq` frame dedup** — `CTexture::Load` reuses one surface for repeated frame files in a `.seq`
+  (`SH_Texture.cpp`, `dx10SH_Texture.cpp`).
+- **`m_textures` snapshot** — loaders/unloaders copy the map under `creationGuard` before iterating
+  (`ResourceManager.cpp`, `ResourceManager_Loader.cpp`, MT).
+- **Constants** — constant loads keep their declared type and size (`r_constants.cpp`,
+  `dx10r_constants.cpp`); `bus_*` constants bind to the shader bus (`features/shader-bus.md`);
+  `ssfx_timedelta.y` now carries `Device.dwFrame` (frame count for shaders); every renderer defines
+  `SHADER_BUS`.
+- **3D UI icon shaders** `ui_icons` / `ui_icons_pp` (`features/script-attachments.md`).
+- `dx10Texture.cpp` logs `GetDeviceRemovedReason` on texture-creation failure.
 
 ## Threading
 
